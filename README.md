@@ -27,6 +27,7 @@ below it is verified on real hardware.
 | 3 | whisper.cpp STT | `scripts/bench_whisper.sh` | **working**; base.en-q5_1 at 0.40x realtime |
 | 4 | Bluetooth HID output | `voicekb/bt_hid.py --serve` | **working**; typed into macOS over an encrypted link |
 | 5 | LLM reformatting + profiles | (tbd) | not started |
+| — | **End-to-end speak-to-type** | `scripts/run_voicekb.py` | **working** |
 | 6 | GPIO buttons | (tbd) | not started |
 
 Stage 4 lands before stage 5 deliberately: an end-to-end path of

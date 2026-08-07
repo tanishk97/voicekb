@@ -35,13 +35,18 @@ if [[ -z "$CARD" ]]; then
   echo "Auto-detected capture card: $CARD"
 fi
 
-ASOUNDRC="$HOME/.asoundrc"
+# Written system-wide, not to ~/.asoundrc, because the pipeline daemon runs as
+# root (binding L2CAP PSMs 17/19 is privileged) and root does not read
+# /home/<user>/.asoundrc. With a per-user file the daemon fails at startup with
+# "No input device matching 'voicekbmic'" -- and only when running for real,
+# since every interactive test runs as the normal user and works fine.
+ASOUNDRC=/etc/asound.conf
 if [[ -f "$ASOUNDRC" ]] && ! grep -q "voicekbmic" "$ASOUNDRC"; then
-  cp "$ASOUNDRC" "$ASOUNDRC.bak"
-  echo "Existing ~/.asoundrc backed up to $ASOUNDRC.bak"
+  sudo cp "$ASOUNDRC" "$ASOUNDRC.bak"
+  echo "Existing $ASOUNDRC backed up to $ASOUNDRC.bak"
 fi
 
-cat > "$ASOUNDRC" <<EOF
+sudo tee "$ASOUNDRC" >/dev/null <<EOF
 # Written by scripts/setup_alsa.sh -- do not hand-edit; re-run the script.
 #
 # 'plug' converts sample rate and format on the fly, so clients may ask for
