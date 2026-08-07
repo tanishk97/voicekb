@@ -104,11 +104,26 @@ class LlmConfig:
 
 
 @dataclass(frozen=True)
+class ButtonsConfig:
+    enabled: bool = True
+    # BCM numbering. GPIO17 is physical pin 11, next to a ground on pin 9.
+    profile_pin: int = 17
+    bounce_ms: float = 50.0
+    # Deliberately two entries. There is no display, so after a press you cannot
+    # see where you landed; blindly stepping through five modes is worse than a
+    # toggle. The original design called for AI-cleaned as default with raw as
+    # "the toggle-to fallback" -- that is a two-position switch. Lengthen this
+    # only if you add an indicator LED.
+    cycle: tuple[str, ...] = ("clean", "raw")
+
+
+@dataclass(frozen=True)
 class Config:
     audio: AudioConfig
     vad: VadConfig
     stt: SttConfig
     llm: LlmConfig
+    buttons: ButtonsConfig
 
     @classmethod
     def load(cls, path: Path | str = DEFAULT_CONFIG) -> "Config":
@@ -120,6 +135,9 @@ class Config:
             stt_raw["substitutions"] = tuple(
                 (k, v) for k, v in (subs.items() if isinstance(subs, dict) else subs)
             )
+        btn_raw = dict(raw.get("buttons", {}))
+        if btn_raw.get("cycle") is not None:
+            btn_raw["cycle"] = tuple(btn_raw["cycle"])
         llm_raw = dict(raw.get("llm", {}))
         if "vocabulary" in llm_raw and llm_raw["vocabulary"] is not None:
             llm_raw["vocabulary"] = tuple(llm_raw["vocabulary"])
@@ -128,4 +146,5 @@ class Config:
             vad=VadConfig(**raw.get("vad", {})),
             stt=SttConfig(**stt_raw),
             llm=LlmConfig(**llm_raw),
+            buttons=ButtonsConfig(**btn_raw),
         )

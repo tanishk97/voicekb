@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from voicekb.audio import open_source  # noqa: E402
 from voicekb.bt_hid import BluetoothHIDKeyboard  # noqa: E402
+from voicekb.buttons import ProfileButton  # noqa: E402
 from voicekb.commands import KeyCommand, ProfileCommand  # noqa: E402
 from voicekb.commands import describe as describe_command  # noqa: E402
 from voicekb.commands import parse as parse_command  # noqa: E402
@@ -61,6 +62,7 @@ def transcribe_worker(
     llm: LlamaReformatter | None,
     profile_ref: list,
     substitutions: dict[str, str],
+    button: ProfileButton | None,
 ) -> None:
     while not _stop.is_set():
         item = work.get()
@@ -97,6 +99,8 @@ def transcribe_worker(
             _log(f"  command: {describe_command(cmd)}")
             if isinstance(cmd, ProfileCommand):
                 profile_ref[0] = cmd.profile
+                if button is not None:
+                    button.sync(cmd.profile)
                 _log(f"  profile is now {cmd.profile!r}")
             elif isinstance(cmd, KeyCommand) and not dry_run:
                 try:
@@ -230,6 +234,27 @@ def main() -> int:
     _log(f"profile: {profile}" + ("" if _uses else "  (no model in this profile)"))
     _log("say e.g. 'slack mode' or 'press enter' to command it")
 
+    # GPIO button. A missing or already-claimed pin must not stop dictation --
+    # the button is a convenience, the microphone is the product.
+    button: ProfileButton | None = None
+    if cfg.buttons.enabled:
+        def _on_button(old: str, new: str) -> None:
+            profile_ref[0] = new
+            _log(f"button: profile {old} -> {new}")
+
+        button = ProfileButton(
+            pin=cfg.buttons.profile_pin,
+            cycle=list(cfg.buttons.cycle),
+            on_change=_on_button,
+            bounce_ms=cfg.buttons.bounce_ms,
+        )
+        try:
+            button.start(profile)
+            _log(f"button: {button.describe()}")
+        except Exception as exc:  # noqa: BLE001
+            _log(f"button unavailable ({exc}); continuing without it")
+            button = None
+
     kb = BluetoothHIDKeyboard(key_delay_s=args.delay_ms / 1000.0)
     if not args.dry_run:
         _log("registering HID profile ...")
@@ -244,7 +269,7 @@ def main() -> int:
     worker = threading.Thread(
         target=transcribe_worker,
         args=(work, stt, kb, sr, not args.no_trailing_space, args.dry_run,
-              llm, profile_ref, dict(cfg.stt.substitutions)),
+              llm, profile_ref, dict(cfg.stt.substitutions), button),
         daemon=True,
     )
     worker.start()
@@ -302,6 +327,8 @@ def main() -> int:
         except queue.Full:
             pass
         kb.close()
+        if button is not None:
+            button.close()
         _log(f"stopped after {utterances} utterance(s)")
     return 0
 

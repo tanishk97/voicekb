@@ -117,3 +117,15 @@ llm:
   # If the LLM server is unreachable, type the raw transcription rather than
   # dropping the utterance. Losing dictation is worse than losing formatting.
   fallback_to_raw: true
+
+buttons:
+  enabled: true
+  # BCM numbering. GPIO17 is physical pin 11, with a ground on physical pin 9.
+  # Wire one tactile-switch leg to each; use DIAGONALLY opposite legs, since the
+  # two legs on each side of a 4-pin switch are bridged internally.
+  profile_pin: 17
+  bounce_ms: 50
+  # Two entries on purpose. There is no display, so after a press you cannot see
+  # which profile you landed on, and blindly cycling five modes is worse than a
+  # toggle. Lengthen only if you add an indicator LED.
+  cycle: [clean, raw]

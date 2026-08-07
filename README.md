@@ -28,7 +28,7 @@ below it is verified on real hardware.
 | 4 | Bluetooth HID output | `voicekb/bt_hid.py --serve` | **working**; typed into macOS over an encrypted link |
 | 5 | LLM reformatting + profiles | `scripts/bench_llm.py` | **working**; Qwen2.5-1.5B, 0.7-2.1s |
 | — | **End-to-end speak-to-type** | `scripts/run_voicekb.py` | **working** |
-| 6 | GPIO buttons | (tbd) | not started |
+| 6 | GPIO button | `scripts/test_button.py` | **working**; toggles profile |
 
 Full design writeup in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), build guide in [docs/REPLICATION.md](docs/REPLICATION.md), dev workflow in [docs/WORKFLOW.md](docs/WORKFLOW.md).
 
@@ -449,6 +449,37 @@ The default stays `base.en-q5_1`, because seven seconds per utterance is a large
 price for punctuation. But this is now a genuine tradeoff rather than a thermal
 impossibility — switch `stt.model` if accuracy ever becomes the bottleneck, for
 instance with technical vocabulary.
+
+## Stage 6: GPIO button
+
+One tactile switch between **GPIO17 (physical pin 11)** and **GND (physical pin
+9)**. No resistor — the internal pull-up is enabled in software, so the pin idles
+HIGH and a press pulls it LOW.
+
+```bash
+./.venv/bin/python scripts/test_button.py     # verify wiring before trusting it
+```
+
+**Use diagonally opposite legs.** A 4-pin tactile switch is really a 2-pin
+switch: the two legs on each side are bridged internally, and pressing connects
+one side to the other. Two legs from the same side read as *permanently
+pressed*, which looks exactly like a software bug. `test_button.py` reads the
+resting state first and says so explicitly if it sees this.
+
+### Why the cycle is only two entries
+
+`buttons.cycle` defaults to `[clean, raw]`. There is no display, so after a press
+you cannot see which profile you landed on — blindly stepping through five modes
+is worse than a toggle. This also matches the original design, which called for
+AI-cleaned as the default with raw as "the toggle-to fallback": a two-position
+switch. Lengthen the cycle only if you add an indicator LED.
+
+Spoken commands (`"commit mode"`) still reach every profile, and the button is
+kept in sync when they do — otherwise the next press would jump from a stale
+position.
+
+The button is a convenience, not a dependency: if the pin is missing or already
+claimed, the daemon logs it and carries on. The microphone is the product.
 
 ## Hardware notes
 
