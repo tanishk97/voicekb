@@ -5,10 +5,17 @@
 # block only -- no code changes downstream.
 
 audio:
-  # ALSA device string. "default" follows the system default; prefer an explicit
-  # plughw:<card>,<dev> once you know the card index (scripts/check_mic.py prints it).
-  # "plughw" rather than "hw" so ALSA handles rate/format conversion for us.
-  device: default
+  # Matched as a substring against PortAudio's device names, or an integer index.
+  #
+  # "voicekbmic" is an ALSA plug device defined by scripts/setup_alsa.sh, not the
+  # raw capsule. It exists because the PCM2902 codec will not give PortAudio a
+  # 16 kHz stream directly (paInvalidSampleRate), and plug converts transparently.
+  # It also insulates us from the ALSA card number, which changes across reboots
+  # and USB ports.
+  #
+  # For a mic array later, re-point setup_alsa.sh at the new card and leave this
+  # name alone. scripts/check_mic.py --list shows what PortAudio can see.
+  device: voicekbmic
 
   # Downstream (VAD + whisper.cpp) is fixed at 16 kHz mono int16. Don't change
   # these two without changing the consumers.

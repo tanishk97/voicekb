@@ -19,7 +19,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 rsync -av --delete \
   --exclude '.git/' \
-  --exclude '.venv/' \
+  --exclude '.venv*/' \
   --exclude 'models/' \
   --exclude '__pycache__/' \
   --exclude '*.wav' \

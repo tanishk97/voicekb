@@ -22,7 +22,7 @@ below it is verified on real hardware.
 
 | # | Stage | Verify with | Status |
 |---|-------|-------------|--------|
-| 1 | Audio capture | `tests/test_audio.py`, `scripts/check_mic.py` | logic tested; **not yet run on the Pi or the USB mic** |
+| 1 | Audio capture | `tests/test_audio.py`, `scripts/check_mic.py` | **working on hardware**; pending a speech-level check |
 | 2 | VAD segmentation | (tbd) | not started |
 | 3 | whisper.cpp STT | (tbd) | not started |
 | 4 | Bluetooth HID output | (tbd) | not started |
@@ -62,12 +62,24 @@ Two gotchas that cost real time if missed:
 On the Pi:
 
 ```bash
-bash scripts/setup_pi.sh
-./.venv/bin/python scripts/check_mic.py --list   # find the card
-# set audio.device in config/default.yaml, then:
-bash scripts/set_gain.sh                          # hardware capture gain
-./.venv/bin/python scripts/check_mic.py           # record 5s and grade it
+bash scripts/setup_pi.sh     # apt deps + venv
+bash scripts/setup_alsa.sh   # define the "voicekbmic" plug device
+bash scripts/set_gain.sh     # hardware capture gain
+./.venv/bin/python tests/test_audio.py    # logic, no mic needed
+./.venv/bin/python scripts/check_mic.py   # record and grade
 ```
+
+### Why capture goes through an ALSA `plug` device
+
+The USB capsule uses a Texas Instruments PCM2902 codec. PortAudio cannot open it
+directly at 16 kHz — it fails with `paInvalidSampleRate` — even though `arecord`
+negotiates that rate on the same device without complaint. PortAudio's ALSA
+backend is simply stricter about rate negotiation.
+
+`scripts/setup_alsa.sh` therefore defines a `plug`-wrapped PCM named
+`voicekbmic` in `~/.asoundrc`, which converts rate and format transparently.
+Config refers to that name rather than `hw:2,0`, which also means the ALSA card
+number can change across reboots or USB ports without breaking anything.
 
 Run `check_mic.py` twice — once in silence to measure the noise floor, once
 speaking normally. It reports peak level, noise floor, and SNR, and tells you
