@@ -78,16 +78,41 @@ class SttConfig:
 
 
 @dataclass(frozen=True)
+class LlmConfig:
+    # AI-cleaned is the default mode; "raw" is the toggle-to fallback.
+    enabled: bool = True
+    profile: str = "clean"
+    base_url: str = "http://127.0.0.1:8080"
+    model: str = "models/Llama-3.2-1B-Instruct-Q4_K_M.gguf"
+    binary: str = "vendor/llama.cpp/build/bin/llama-server"
+    threads: int = 4
+    context_size: int = 2048
+    timeout_s: float = 60.0
+    # Terms speech-to-text reliably mangles. "voicekb" came back as
+    # "voice he be" -- an invented word has no entry in base.en's vocabulary, so
+    # no amount of audio tuning fixes it. The LLM can restore it from context.
+    vocabulary: tuple[str, ...] = ("voicekb",)
+    # If the server is unreachable, type the raw transcription rather than
+    # dropping the utterance. Losing dictation is worse than losing formatting.
+    fallback_to_raw: bool = True
+
+
+@dataclass(frozen=True)
 class Config:
     audio: AudioConfig
     vad: VadConfig
     stt: SttConfig
+    llm: LlmConfig
 
     @classmethod
     def load(cls, path: Path | str = DEFAULT_CONFIG) -> "Config":
         raw = yaml.safe_load(Path(path).read_text()) or {}
+        llm_raw = dict(raw.get("llm", {}))
+        if "vocabulary" in llm_raw and llm_raw["vocabulary"] is not None:
+            llm_raw["vocabulary"] = tuple(llm_raw["vocabulary"])
         return cls(
             audio=AudioConfig(**raw.get("audio", {})),
             vad=VadConfig(**raw.get("vad", {})),
             stt=SttConfig(**raw.get("stt", {})),
+            llm=LlmConfig(**llm_raw),
         )

@@ -31,16 +31,27 @@ else
   git clone --depth 1 https://github.com/ggml-org/llama.cpp "$LLAMA"
 fi
 
-echo "=== building (slow: 4 cores, no active cooler) ==="
-cmake -S "$LLAMA" -B "$LLAMA/build" -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=OFF >/dev/null
-cmake --build "$LLAMA/build" -j"$(nproc)" --config Release --target llama-cli
+# One core is left free deliberately. With no active cooler, -j4 pushed the SoC
+# to 72 C while the pipeline was also running, and small.en alone has tripped the
+# 80 C soft limit before. Peak temperature is the binding constraint here, not
+# total build time. Override with JOBS=4 if you have added cooling.
+JOBS="${JOBS:-$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))}"
 
-BIN="$LLAMA/build/bin/llama-cli"
-if [[ ! -x "$BIN" ]]; then
-  echo "Build finished but $BIN is missing. Check the output above." >&2
-  exit 1
-fi
-echo "Built: $BIN"
+echo "=== building with $JOBS job(s); watch the temperature ==="
+cmake -S "$LLAMA" -B "$LLAMA/build" -DCMAKE_BUILD_TYPE=Release -DLLAMA_CURL=OFF >/dev/null
+# llama-server, not just llama-cli: voicekb/llm.py talks to the server's
+# OpenAI-compatible API so the model stays resident and chat templates are
+# applied from GGUF metadata rather than hand-rolled per model.
+cmake --build "$LLAMA/build" -j"$JOBS" --config Release --target llama-cli llama-server
+
+for want in llama-cli llama-server; do
+  if [[ ! -x "$LLAMA/build/bin/$want" ]]; then
+    echo "Build finished but $want is missing. Check the output above." >&2
+    exit 1
+  fi
+  echo "Built: $LLAMA/build/bin/$want"
+done
+echo "SoC temperature after build: $(vcgencmd measure_temp 2>/dev/null || echo n/a)"
 
 fetch() {
   local name="$1" url="$2" target="$MODELS/$1"

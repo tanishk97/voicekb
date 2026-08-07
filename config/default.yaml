@@ -85,3 +85,24 @@ stt:
   threads: 4
   beam_size: 5
   language: en
+
+llm:
+  # AI-cleaned is the DEFAULT mode; "raw" is the toggle-to fallback.
+  enabled: true
+  profile: clean          # clean | slack | commit | email | raw
+  base_url: http://127.0.0.1:8080
+  model: models/Llama-3.2-1B-Instruct-Q4_K_M.gguf
+  binary: vendor/llama.cpp/build/bin/llama-server
+  threads: 4
+  context_size: 2048
+  timeout_s: 60
+
+  # Terms speech-to-text reliably mangles. "voicekb" came back as "voice he be":
+  # an invented word has no entry in base.en's vocabulary, so no amount of audio
+  # tuning fixes it. The LLM can restore it from context.
+  vocabulary:
+    - voicekb
+
+  # If the LLM server is unreachable, type the raw transcription rather than
+  # dropping the utterance. Losing dictation is worse than losing formatting.
+  fallback_to_raw: true
