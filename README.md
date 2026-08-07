@@ -34,6 +34,29 @@ Stage 4 lands before stage 5 deliberately: an end-to-end path of
 optional by design. Wiring the optional layer before the required one would mean
 debugging both at once.
 
+## Stage 0: provisioning the Pi
+
+Flashed with Raspberry Pi Imager, using its customization dialog so the Pi joins
+Wi-Fi and accepts SSH on first boot with no monitor attached.
+
+| Setting | Value |
+|---------|-------|
+| OS | Raspberry Pi OS Lite (64-bit), Bookworm |
+| Hostname | `voicekb` (reachable as `voicekb.local`) |
+| User | `tanishk` |
+| SSH | public-key only, `~/.ssh/id_ed25519_pi` |
+| Wi-Fi country | **US** — must be set, or the radio stays disabled |
+
+An `ssh voicekb` alias is configured in `~/.ssh/config` on the Mac.
+
+Two gotchas that cost real time if missed:
+
+- **Wi-Fi country is not optional.** Leave it unset and the Pi 5's radio comes up
+  administratively disabled with no obvious error — it looks like a bad password.
+- **The Pi 5's USB-C port is power-only** and its USB-A ports are host ports, so
+  no cable arrangement makes the Pi a USB device to a Mac. Networking has to come
+  over Wi-Fi or Ethernet. This is the same reason output is Bluetooth HID.
+
 ## Stage 1: audio capture
 
 On the Pi:
