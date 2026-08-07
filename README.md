@@ -8,7 +8,9 @@ the standard HID identity and nothing in it is platform-specific.
 
 Everything runs on the device. No cloud, no app, no account.
 
-The rest of this file is for building one.
+**New here?** [Read the plain-language introduction](https://tanishk97.github.io/voicekb/)
+— what it is and why you'd want one, with a hold-to-talk demo you can try in
+the page. The rest of this file is for building one.
 
 ## Layout
 
