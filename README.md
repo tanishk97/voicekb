@@ -78,9 +78,17 @@ negotiates that rate on the same device without complaint. PortAudio's ALSA
 backend is simply stricter about rate negotiation.
 
 `scripts/setup_alsa.sh` therefore defines a `plug`-wrapped PCM named
-`voicekbmic` in `~/.asoundrc`, which converts rate and format transparently.
-Config refers to that name rather than `hw:2,0`, which also means the ALSA card
-number can change across reboots or USB ports without breaking anything.
+`voicekbmic`, which converts rate and format transparently. Config refers to
+that name rather than `hw:2,0`, which also means the ALSA card number can change
+across reboots or USB ports without breaking anything.
+
+It is written to **`/etc/asound.conf`, not `~/.asoundrc`** — and that distinction
+cost real debugging time. The pipeline daemon runs as root, because binding
+L2CAP PSMs 17 and 19 is privileged, and root does not read
+`/home/<user>/.asoundrc`. With a per-user file every interactive test passes
+(they all run as the normal user) while the actual daemon dies with
+`No input device matching 'voicekbmic'` — immediately *after* accepting the
+Bluetooth connection, which makes an audio bug look like a Bluetooth bug.
 
 Run `check_mic.py` twice — once in silence to measure the noise floor, once
 speaking normally. It reports peak level, noise floor, and SNR, and tells you
