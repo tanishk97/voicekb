@@ -86,6 +86,15 @@ stt:
   beam_size: 5
   language: en
 
+  # Known mis-transcriptions, applied verbatim after whisper. whisper cannot
+  # emit a word outside its vocabulary, so an invented term comes back mangled
+  # the same way every time -- "voicekb" is reliably "voice he be". That
+  # consistency is what makes a lookup table work where audio tuning cannot.
+  # Explicit phrases only; no fuzzy matching, which would eventually rewrite a
+  # word you actually said.
+  substitutions:
+    "voice he be": voicekb
+
 llm:
   # AI-cleaned is the DEFAULT mode; "raw" is the toggle-to fallback.
   enabled: true

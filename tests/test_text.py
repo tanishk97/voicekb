@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from voicekb.hid_keycodes import unmappable  # noqa: E402
 from voicekb.text import (  # noqa: E402
+    apply_substitutions,
     collapse_whitespace,
     strip_fillers,
     fold_to_ascii,
@@ -137,9 +138,32 @@ def test_strip_fillers() -> None:
         "So it broke again. You know what, right?"))
 
 
+def test_substitutions() -> None:
+    """whisper cannot emit a word outside its vocabulary.
+
+    "voicekb" is invented, so base.en renders it "voice he be" every time. That
+    consistency is what a lookup table exploits. Asking the LLM to restore it
+    was tried on both models and failed.
+    """
+    print("=== known mis-transcriptions ===")
+    m = {"voice he be": "voicekb"}
+    check("restores at the start", apply_substitutions("voice he be working", m)
+          == "voicekb working")
+    check("restores mid-sentence", apply_substitutions("So voice he be is running", m)
+          == "So voicekb is running")
+    check("case-insensitive", apply_substitutions("Voice He Be works", m) == "voicekb works")
+    check("does not fire inside another word",
+          apply_substitutions("the voicemail is fine", m) == "the voicemail is fine")
+    check("untouched when nothing matches",
+          apply_substitutions("the deploy broke", m) == "the deploy broke")
+    check("empty mapping is a no-op", apply_substitutions("anything", {}) == "anything")
+    check("longer phrases win over shorter ones",
+          apply_substitutions("a b c", {"a b": "X", "a b c": "Y"}) == "Y")
+
+
 def main() -> int:
     for fn in (test_typography, test_annotations, test_whitespace, test_non_speech,
-               test_strip_fillers, test_end_to_end_typeable):
+               test_strip_fillers, test_substitutions, test_end_to_end_typeable):
         fn()
     print()
     if failures:

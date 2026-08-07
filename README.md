@@ -355,11 +355,29 @@ every utterance, but too short fragments your sentences.
 
 ### Known limitation: the vocabulary hint does not work
 
-`llm.vocabulary` is meant to restore terms whisper mangles, seeded with
-`voicekb` (which whisper renders "voice he be"). Neither model restores it —
-Qwen turns "voice he be working" into "he is working". The hint costs nothing
-and is left in place, but do not rely on it. A larger model or a deterministic
-post-STT substitution would be the real fix.
+whisper cannot emit a word outside its vocabulary. `voicekb` is invented, so
+base.en renders it "voice he be" — every single time.
+
+The LLM route was tried first via `llm.vocabulary` and failed on both models:
+Qwen turns "voice he be working" into "he is working". The hint is left in the
+prompt because it costs nothing, but nothing relies on it.
+
+The working fix is `stt.substitutions`, an explicit lookup table applied
+straight after transcription. The consistency of the mangling is exactly what
+makes this work where audio tuning cannot.
+
+Explicit phrases only — deliberately no fuzzy matching. A similarity-based
+matcher would eventually rewrite a word you actually said, and silently
+corrupting correct dictation is far worse than leaving one term wrong. Matching
+is case-insensitive and word-boundary anchored, so "voicemail" is untouched.
+
+Add your own terms as you find them:
+
+```yaml
+stt:
+  substitutions:
+    "voice he be": voicekb
+```
 
 ## Hardware notes
 

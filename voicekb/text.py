@@ -137,6 +137,31 @@ def strip_fillers(text: str) -> str:
     return out
 
 
+def apply_substitutions(text: str, mapping: dict[str, str]) -> str:
+    """Replace known mis-transcriptions with the words you meant.
+
+    whisper cannot produce a word that is not in its vocabulary. "voicekb" is
+    invented, so base.en renders it "voice he be" every time -- consistently,
+    which is what makes a lookup table work where audio tuning cannot. Asking
+    the LLM to restore it was tried and failed on both models.
+
+    Explicit phrases only, no fuzzy matching. A similarity-based matcher would
+    eventually rewrite a word you actually said, and silently corrupting correct
+    dictation is far worse than leaving one term wrong.
+
+    Matching is case-insensitive and word-boundary anchored, so "voice he be"
+    will not fire inside a longer word. The replacement's capitalisation is used
+    as written.
+    """
+    if not mapping or not text.strip():
+        return text
+    # Longest first, so a specific phrase wins over a prefix of itself.
+    for wrong in sorted(mapping, key=len, reverse=True):
+        right = mapping[wrong]
+        text = re.sub(rf"\b{re.escape(wrong)}\b", right, text, flags=re.IGNORECASE)
+    return text
+
+
 def is_non_speech(text: str) -> bool:
     """True if whisper heard a sound rather than words, and nothing should be typed.
 

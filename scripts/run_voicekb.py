@@ -30,7 +30,12 @@ from voicekb.bt_hid import BluetoothHIDKeyboard  # noqa: E402
 from voicekb.config import DEFAULT_CONFIG, Config  # noqa: E402
 from voicekb.stt import WhisperSTT  # noqa: E402
 from voicekb.llm import LlamaReformatter  # noqa: E402
-from voicekb.text import is_non_speech, normalize_for_hid, strip_fillers  # noqa: E402
+from voicekb.text import (  # noqa: E402
+    apply_substitutions,
+    is_non_speech,
+    normalize_for_hid,
+    strip_fillers,
+)
 from voicekb.vad import VadSegmenter  # noqa: E402
 
 _stop = threading.Event()
@@ -52,6 +57,7 @@ def transcribe_worker(
     dry_run: bool,
     llm: LlamaReformatter | None,
     profile: str,
+    substitutions: dict[str, str],
 ) -> None:
     while not _stop.is_set():
         item = work.get()
@@ -75,9 +81,16 @@ def transcribe_worker(
         # Deterministic filler removal for every profile except 'raw', which
         # promises the exact transcription. It cannot hallucinate or delete
         # anything that was not on the filler list.
-        text = result.text if profile == "raw" else strip_fillers(result.text)
+        # Known mis-transcriptions first: fix the words, then remove filler,
+        # so a substituted term is present before anything else reasons about it.
+        text = apply_substitutions(result.text, substitutions)
         if text != result.text:
-            _log(f"  fillers: {result.text!r} -> {text!r}")
+            _log(f"  substituted: {result.text!r} -> {text!r}")
+        before_fillers = text
+        if profile != "raw":
+            text = strip_fillers(text)
+        if text != before_fillers:
+            _log(f"  fillers: {before_fillers!r} -> {text!r}")
         if llm is not None:
             try:
                 shaped = llm.reformat(text, profile)
@@ -198,7 +211,7 @@ def main() -> int:
     worker = threading.Thread(
         target=transcribe_worker,
         args=(work, stt, kb, sr, not args.no_trailing_space, args.dry_run,
-              llm, profile),
+              llm, profile, dict(cfg.stt.substitutions)),
         daemon=True,
     )
     worker.start()

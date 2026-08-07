@@ -75,6 +75,10 @@ class SttConfig:
     # accuracy is effectively free. See the benchmark table in the README.
     beam_size: int = 5
     language: str = "en"
+    # Known mis-transcriptions, applied verbatim after whisper. whisper cannot
+    # emit a word outside its vocabulary, so invented terms come back mangled
+    # the same way every time -- which is exactly what a lookup table handles.
+    substitutions: tuple[tuple[str, str], ...] = (("voice he be", "voicekb"),)
 
 
 @dataclass(frozen=True)
@@ -88,9 +92,7 @@ class LlmConfig:
     threads: int = 4
     context_size: int = 2048
     timeout_s: float = 60.0
-    # Terms speech-to-text reliably mangles. "voicekb" came back as
-    # "voice he be" -- an invented word has no entry in base.en's vocabulary, so
-    # no amount of audio tuning fixes it. The LLM can restore it from context.
+    # Kept for the LLM prompt, though neither model acts on it reliably.
     vocabulary: tuple[str, ...] = ("voicekb",)
     # If the server is unreachable, type the raw transcription rather than
     # dropping the utterance. Losing dictation is worse than losing formatting.
@@ -107,12 +109,19 @@ class Config:
     @classmethod
     def load(cls, path: Path | str = DEFAULT_CONFIG) -> "Config":
         raw = yaml.safe_load(Path(path).read_text()) or {}
+        stt_raw = dict(raw.get("stt", {}))
+        subs = stt_raw.get("substitutions")
+        if subs:
+            # YAML gives a mapping; the dataclass is frozen so it needs tuples.
+            stt_raw["substitutions"] = tuple(
+                (k, v) for k, v in (subs.items() if isinstance(subs, dict) else subs)
+            )
         llm_raw = dict(raw.get("llm", {}))
         if "vocabulary" in llm_raw and llm_raw["vocabulary"] is not None:
             llm_raw["vocabulary"] = tuple(llm_raw["vocabulary"])
         return cls(
             audio=AudioConfig(**raw.get("audio", {})),
             vad=VadConfig(**raw.get("vad", {})),
-            stt=SttConfig(**raw.get("stt", {})),
+            stt=SttConfig(**stt_raw),
             llm=LlmConfig(**llm_raw),
         )
