@@ -1,0 +1,5 @@
+# Stage 1: audio capture only. VAD / STT / LLM / HID deps get added per stage,
+# so a broken install in a later stage can never block an earlier one.
+numpy>=1.26
+sounddevice>=0.4.6
+PyYAML>=6.0

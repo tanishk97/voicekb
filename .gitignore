@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Model weights -- multi-GB, fetched by scripts, never committed.
+models/
+*.gguf
+*.bin
+
+# Recordings and scratch audio.
+*.wav
+!tests/fixtures/*.wav
+
+# Local overrides of config/default.yaml.
+config/local.yaml
+.DS_Store

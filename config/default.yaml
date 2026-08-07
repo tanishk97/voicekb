@@ -1,0 +1,35 @@
+# Voice-to-keyboard configuration.
+#
+# The audio block is the swap point for better hardware. Moving from the cheap
+# USB capsule to a beamforming array (ReSpeaker, etc.) should mean editing this
+# block only -- no code changes downstream.
+
+audio:
+  # ALSA device string. "default" follows the system default; prefer an explicit
+  # plughw:<card>,<dev> once you know the card index (scripts/check_mic.py prints it).
+  # "plughw" rather than "hw" so ALSA handles rate/format conversion for us.
+  device: default
+
+  # Downstream (VAD + whisper.cpp) is fixed at 16 kHz mono int16. Don't change
+  # these two without changing the consumers.
+  sample_rate: 16000
+  frame_ms: 30 # webrtcvad accepts only 10, 20, or 30
+
+  # Capture channel count. 1 for the USB capsule; 4 or 6 for a mic array.
+  channels: 1
+
+  # How to collapse multichannel capture to mono:
+  #   null -> average all channels
+  #   <int> -> take that channel index only (a ReSpeaker's beamformed output
+  #            is usually channel 0, with the raw capsules on 1..N)
+  channel_select: null
+
+  # Hardware capture volume, applied via `amixer` by scripts/set_gain.sh.
+  # Cheap USB mics ship near-silent; this is the *first* knob to turn because it
+  # amplifies before the ADC noise floor matters as much.
+  alsa_capture_percent: 80
+
+  # Software gain applied after capture, as a last resort. This amplifies the
+  # noise floor along with your voice, so raise alsa_capture_percent first.
+  # 1.0 = off.
+  software_gain: 1.0
