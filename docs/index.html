@@ -3,24 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="Speak into a small box and the words appear on whatever you're using. Everything runs on the device — no cloud, no app, no account.">
+<title>voicekb — talk instead of typing</title>
+<meta name="description" content="Hold a button, say what you mean, let go. The words appear on whatever you're using. Everything runs on the device — no cloud, no app, no account.">
 <meta name="color-scheme" content="light dark">
 <meta property="og:title" content="voicekb — talk instead of typing">
 <meta property="og:description" content="Hold the button, say what you mean, let go. The words appear wherever your cursor is. Nothing you say leaves the device.">
 <meta property="og:type" content="website">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>%F0%9F%8E%99</text></svg>">
-<style>html,body{min-height:100%;}body{margin:0;}</style>
-<title>voicekb — talk instead of type</title>
 <style>
   :root{
     --ink:#12171A; --paper:#E7E5DE; --accent:#E39B2F; --accent-deep:#B9601C;
-    --muted:#6E767B; --live:#5FA773;
-    --ground:var(--paper); --figure:var(--ink);
+    --muted:#6E767B; --ground:var(--paper); --figure:var(--ink);
     --panel:#DEDCD4; --rule:rgba(18,23,26,.16); --soft:rgba(18,23,26,.06);
     --display:Superclarendon,"Bookman Old Style",Rockwell,Georgia,serif;
     --body:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
     --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-    --w:min(72ch,92vw);
+    --w:min(74ch,92vw);
   }
   @media (prefers-color-scheme:dark){
     :root{--ground:#12171A;--figure:#E7E5DE;--panel:#1A2126;
@@ -32,35 +30,46 @@
     --rule:rgba(18,23,26,.16);--soft:rgba(18,23,26,.06);--muted:#6E767B;}
 
   *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
   body{margin:0;background:var(--ground);color:var(--figure);
-       font:400 17px/1.65 var(--body);-webkit-font-smoothing:antialiased;}
+       font:400 17px/1.65 var(--body);-webkit-font-smoothing:antialiased;
+       overflow-x:hidden;}
   .wrap{width:var(--w);margin-inline:auto;}
-  section{padding-block:clamp(48px,8vw,88px);}
+  section{padding-block:clamp(44px,7vw,76px);}
   section + section{border-top:1px solid var(--rule);}
   h1,h2,h3{font-family:var(--display);font-weight:700;text-wrap:balance;
            letter-spacing:-.015em;margin:0;}
-  h1{font-size:clamp(38px,7.5vw,68px);line-height:1.02;}
-  h2{font-size:clamp(26px,4.2vw,38px);line-height:1.1;margin-bottom:.5em;}
-  h3{font-size:19px;line-height:1.3;margin-bottom:.35em;}
+  h1{font-size:clamp(40px,8vw,74px);line-height:1;}
+  h2{font-size:clamp(25px,4vw,36px);line-height:1.12;margin-bottom:.45em;}
+  h3{font-size:18px;line-height:1.3;margin-bottom:.3em;}
   p{margin:0 0 1em;max-width:62ch;}
-  .lede{font-size:clamp(19px,2.4vw,23px);line-height:1.5;color:var(--figure);}
+  .lede{font-size:clamp(19px,2.3vw,23px);line-height:1.5;}
   .muted{color:var(--muted);}
   .label{font:600 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;
-         color:var(--muted);display:block;margin-bottom:1.1em;}
+         color:var(--muted);display:block;margin-bottom:1em;}
 
-  /* ---- faceplate: the hero is the product ---- */
+  /* ---- staged entrance + scroll reveal ---- */
+  .rise{opacity:0;transform:translateY(14px);}
+  .in{opacity:1;transform:none;transition:opacity .7s cubic-bezier(.2,.7,.3,1),
+       transform .7s cubic-bezier(.2,.7,.3,1);}
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto;}
+    .rise{opacity:1;transform:none;} .in{transition:none;}
+  }
+
+  /* ---- the rig ---- */
   .plate{background:var(--panel);border:1px solid var(--rule);border-radius:3px;
-         padding:clamp(20px,4vw,34px);box-shadow:0 1px 0 var(--soft) inset;}
-  .rig{display:grid;gap:22px;grid-template-columns:150px 1fr;align-items:center;}
-  @media (max-width:620px){.rig{grid-template-columns:1fr;}}
+         padding:clamp(18px,3.5vw,30px);box-shadow:0 1px 0 var(--soft) inset;}
+  .rig{display:grid;gap:22px;grid-template-columns:154px 1fr;align-items:center;}
+  @media (max-width:640px){.rig{grid-template-columns:1fr;}}
 
   .ptt{appearance:none;-webkit-appearance:none;border:0;cursor:pointer;
-       width:150px;height:150px;border-radius:50%;background:var(--ink);
+       width:154px;height:154px;border-radius:50%;background:var(--ink);
        color:var(--paper);font:700 13px/1.25 var(--mono);letter-spacing:.14em;
-       text-transform:uppercase;display:grid;place-content:center;gap:8px;
+       text-transform:uppercase;display:grid;place-content:center;gap:9px;
        box-shadow:0 6px 0 var(--accent-deep),0 10px 22px rgba(0,0,0,.28);
-       transition:transform .07s ease,box-shadow .07s ease;justify-self:center;
-       touch-action:none;-webkit-user-select:none;user-select:none;}
+       transition:transform .08s ease,box-shadow .08s ease;justify-self:center;
+       touch-action:none;-webkit-user-select:none;user-select:none;position:relative;}
   .ptt:focus-visible{outline:3px solid var(--accent);outline-offset:5px;}
   .ptt[data-live="1"]{transform:translateY(6px);
        box-shadow:0 0 0 var(--accent-deep),0 0 0 4px var(--accent),0 4px 14px rgba(0,0,0,.3);}
@@ -68,60 +77,63 @@
         justify-self:center;box-shadow:0 0 0 1px rgba(0,0,0,.35) inset;}
   .ptt[data-live="1"] .lamp{background:var(--accent);
         box-shadow:0 0 10px var(--accent),0 0 0 1px rgba(0,0,0,.3) inset;}
+  /* one ring pulse when the demo takes over, so the eye goes to the button */
+  .ptt::after{content:"";position:absolute;inset:-6px;border-radius:50%;
+        border:2px solid var(--accent);opacity:0;}
+  @media (prefers-reduced-motion:no-preference){
+    .ptt[data-ping="1"]::after{animation:ping 1.5s cubic-bezier(.2,.7,.3,1) 2;}
+    @keyframes ping{0%{opacity:.75;transform:scale(1);}100%{opacity:0;transform:scale(1.28);}}
+  }
 
   .screen{background:var(--ground);border:1px solid var(--rule);border-radius:2px;
-          min-height:132px;padding:16px 18px;font:400 16px/1.6 var(--mono);
+          min-height:148px;padding:15px 17px;font:400 16px/1.6 var(--mono);
           overflow-wrap:break-word;}
-  .screen .ph{color:var(--muted);}
   .caret{display:inline-block;width:.55em;height:1.05em;vertical-align:-.18em;
          background:var(--accent);}
   @media (prefers-reduced-motion:no-preference){
     .caret{animation:blink 1.05s steps(1,end) infinite;}
     @keyframes blink{50%{opacity:0;}}
   }
-  canvas{display:block;width:100%;height:38px;margin-top:14px;}
+  canvas{display:block;width:100%;height:36px;margin-top:12px;}
 
-  .modes{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;}
+  .modes{display:flex;flex-wrap:wrap;gap:8px;margin-top:15px;}
   .mode{appearance:none;background:transparent;color:var(--muted);cursor:pointer;
         border:1px solid var(--rule);border-radius:2px;padding:7px 13px;
-        font:600 11px/1 var(--mono);letter-spacing:.11em;text-transform:uppercase;}
-  .mode[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);
-        color:#12171A;}
+        font:600 11px/1 var(--mono);letter-spacing:.11em;text-transform:uppercase;
+        transition:background .18s,color .18s,border-color .18s;}
+  .mode[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#12171A;}
   .mode:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
 
-  .grid{display:grid;gap:26px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));}
+  .grid{display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));}
   .grid p{margin-bottom:0;}
   .num{font:700 12px/1 var(--mono);color:var(--accent-deep);letter-spacing:.1em;
-       display:block;margin-bottom:.7em;}
+       display:block;margin-bottom:.6em;}
   @media (prefers-color-scheme:dark){.num{color:var(--accent);}}
   :root[data-theme="dark"] .num{color:var(--accent);}
-
-  ul{padding-left:1.1em;margin:0;} li{margin-bottom:.5em;max-width:60ch;}
-  .rule{height:1px;background:var(--rule);border:0;margin:0;}
-  footer{padding-block:44px;color:var(--muted);font-size:14px;}
-  a{color:inherit;text-underline-offset:3px;text-decoration-thickness:1px;}
+  ul{padding-left:1.05em;margin:0;} li{margin-bottom:.45em;max-width:60ch;}
+  footer{padding-block:40px;color:var(--muted);font-size:14px;
+         border-top:1px solid var(--rule);}
+  a{color:inherit;text-underline-offset:3px;}
 </style>
-
 </head>
 <body>
+
 <section>
   <div class="wrap">
-    <span class="label">A small box that listens</span>
-    <h1>Talk instead of&nbsp;typing.</h1>
-    <p class="lede">Hold the button, say what you mean, let go. The words appear
-      wherever your cursor is — an email, a message, a document, a search box.
-      Nothing you say ever leaves the device.</p>
+    <span class="label rise" data-step="1">A small box that listens</span>
+    <h1 class="rise" data-step="2">Talk instead<br>of&nbsp;typing.</h1>
+    <p class="lede rise" data-step="3">Hold the button, say what you mean, let go.
+      The words appear on whatever you're using — phone, laptop, anything with a
+      screen. Nothing you say ever leaves the device.</p>
 
-    <div class="plate" style="margin-top:32px;">
+    <div class="plate rise" data-step="4" style="margin-top:30px;">
       <div class="rig">
         <button class="ptt" id="ptt" aria-describedby="hint">
           <span class="lamp" aria-hidden="true"></span>
           <span id="pttLabel">Hold<br>to talk</span>
         </button>
         <div>
-          <div class="screen" id="screen" aria-live="polite">
-            <span class="ph">Press and hold the button, then release.</span>
-          </div>
+          <div class="screen" id="screen" aria-live="polite"></div>
           <canvas id="wave" aria-hidden="true"></canvas>
         </div>
       </div>
@@ -131,143 +143,124 @@
         <button class="mode" data-mode="organised" aria-pressed="false">Organised</button>
         <button class="mode" data-mode="note" aria-pressed="false">Message</button>
       </div>
-      <p class="muted" id="hint" style="margin:14px 0 0;font-size:14px;">
-        A demonstration — the text below is what the real device produces from the
-        same spoken sentence in each mode.
+      <p class="muted" id="hint" style="margin:13px 0 0;font-size:14px;">
+        Each mode shows what the real device produces from the same spoken sentence.
       </p>
     </div>
   </div>
 </section>
 
 <section>
-  <div class="wrap">
+  <div class="wrap rise">
     <span class="label">Why it exists</span>
-    <h2>Speaking is faster than typing. Reading back what you said is not.</h2>
-    <p>Dictation usually gives you a wall of words with every “um” and false start
-      still in it, so you spend the time you saved cleaning it up. This tidies as
-      it goes — and it can go further, turning a rambling thought into something
-      organised, without dropping anything you said.</p>
-    <p>It also waits for you. Pause mid-sentence to think for as long as you like;
-      it only stops listening when you let go of the button.</p>
+    <h2>Speaking is faster than typing. Tidying up afterwards is not.</h2>
+    <p>Ordinary dictation hands you a wall of words with every “um” and false
+      start still in it, so you spend the time you saved cleaning it up. This
+      cleans as it goes — and can go further, turning a rambling thought into
+      something organised without dropping anything you said.</p>
+    <p>It also waits for you. Pause mid-sentence to think for as long as you
+      like. It only stops listening when you let go.</p>
   </div>
 </section>
 
 <section>
-  <div class="wrap">
+  <div class="wrap rise">
     <span class="label">Three things worth knowing</span>
     <div class="grid">
       <div>
         <h3>Nothing leaves the box</h3>
-        <p>Your voice is never uploaded. Everything — hearing you, writing it
-          down, tidying it up — happens on the device itself. It works with the
-          internet unplugged.</p>
+        <p>Your voice is never uploaded. Hearing you, writing it down, tidying it
+          up — all of it happens on the device. It works with the internet
+          unplugged.</p>
       </div>
       <div>
         <h3>It pretends to be a keyboard</h3>
-        <p>Your phone or laptop sees an ordinary wireless keyboard. No app to
-          install, no account, no permissions. If a device accepts a keyboard, it
-          accepts this.</p>
+        <p>Your phone or laptop just sees a wireless keyboard. No app, no account,
+          no permissions. If a device accepts a keyboard, it accepts this.</p>
       </div>
       <div>
         <h3>It works anywhere you type</h3>
-        <p>Not one blessed app. Whatever is in front of you — a text box, a
-          spreadsheet cell, a chat window, a search bar — is where the words go.</p>
+        <p>Not one blessed app. A text box, a spreadsheet cell, a chat window, a
+          search bar — wherever the cursor is, that's where the words go.</p>
       </div>
     </div>
   </div>
 </section>
 
 <section>
-  <div class="wrap">
+  <div class="wrap rise">
     <span class="label">Using it</span>
-    <h2>The whole interaction is one button.</h2>
-    <div class="grid" style="margin-top:26px;">
-      <div><span class="num">HOLD</span>
-        <p>Press and keep holding. A light comes on to show it's listening.</p></div>
-      <div><span class="num">SPEAK</span>
-        <p>Say the thing. Pause, backtrack, think — it keeps listening.</p></div>
-      <div><span class="num">RELEASE</span>
-        <p>Let go. A few seconds later the words appear where your cursor is.</p></div>
+    <h2>The whole thing is one button.</h2>
+    <div class="grid" style="margin-top:24px;">
+      <div><span class="num">HOLD</span><p>Press and keep holding. A light comes
+        on to show it's listening.</p></div>
+      <div><span class="num">SPEAK</span><p>Say the thing. Pause, backtrack,
+        think — it keeps listening.</p></div>
+      <div><span class="num">RELEASE</span><p>Let go. A moment later the words
+        appear where your cursor is.</p></div>
     </div>
-    <p style="margin-top:28px;">You can also just talk to it. Saying
-      <em>“organised mode”</em> switches how it writes; <em>“press enter”</em>
-      presses Enter. It knows the difference between an instruction and a
-      sentence that happens to sound like one.</p>
+    <p style="margin-top:26px;">You can also just talk to it. Say
+      <em>“organised mode”</em> to change how it writes, or <em>“press enter”</em>
+      to press Enter. It knows the difference between an instruction and a
+      sentence that merely sounds like one.</p>
   </div>
 </section>
 
 <section>
-  <div class="wrap">
-    <span class="label">What it is made of</span>
-    <h2>A Raspberry Pi, a microphone, and a button.</h2>
-    <p>No subscription, no cloud service, nothing to sign up for. It's a small
-      computer that costs about as much as a nice dinner, running software that
-      is free and open, doing one job well.</p>
-    <p class="muted">If you want to build one, the full instructions —
-      parts, wiring, setup — are in the repository.</p>
-  </div>
-</section>
-
-<section>
-  <div class="wrap">
+  <div class="wrap rise">
     <span class="label">Being honest</span>
     <h2>What it isn't.</h2>
     <ul>
-      <li><strong>It isn't instant.</strong> Expect a few seconds between letting
-        go and the words appearing. It's doing the work on a very small computer.</li>
-      <li><strong>It isn't a smart assistant.</strong> It doesn't answer
-        questions or do things for you. It writes down what you said.</li>
-      <li><strong>It isn't perfect at names.</strong> Unusual words and made-up
-        product names get misheard, like any dictation. You can teach it the ones
-        you use often.</li>
-      <li><strong>It talks to one device at a time.</strong> Switching from your
-        laptop to your phone means disconnecting one and connecting the other.</li>
+      <li><strong>It isn't instant.</strong> A few seconds pass between letting go
+        and the words landing. It's doing real work on a very small computer.</li>
+      <li><strong>It isn't an assistant.</strong> It doesn't answer questions or
+        do things for you. It writes down what you said.</li>
+      <li><strong>It isn't perfect at names.</strong> Unusual words get misheard,
+        like any dictation. You can teach it the ones you use often.</li>
+      <li><strong>It talks to one device at a time.</strong> Moving from laptop to
+        phone means disconnecting one and connecting the other.</li>
     </ul>
+    <p style="margin-top:22px;">Built from a Raspberry Pi, a microphone and a
+      button. No subscription, nothing to sign up for.
+      <a href="https://github.com/tanishk97/voicekb">Build instructions are on
+      GitHub</a>.</p>
   </div>
 </section>
 
-<hr class="rule">
-<footer>
-  <div class="wrap">
-    voicekb — a voice-to-keyboard device that runs entirely on your desk.
-  </div>
-</footer>
+<footer><div class="wrap">voicekb — a voice-to-keyboard device that runs entirely on your desk.</div></footer>
 
 <script>
 (function(){
-  var SCRIPT = [
-    {t:1200, s:"um so"},
-    {t:2400, s:"um so there are two things"},
-    {t:3600, s:"um so there are two things wrong with the deploy"},
-    {t:5200, s:"um so there are two things wrong with the deploy first the auth token expired"},
-    {t:7000, s:"um so there are two things wrong with the deploy first the auth token expired and second nobody updated the runbook you know"}
-  ];
-  var OUT = {
+  var SPEECH=[{t:900,s:"um so"},{t:1900,s:"um so there are two things"},
+    {t:2900,s:"um so there are two things wrong with the deploy"},
+    {t:4100,s:"um so there are two things wrong with the deploy first the auth token expired"},
+    {t:5400,s:"um so there are two things wrong with the deploy first the auth token expired and second nobody updated the runbook you know"}];
+  var OUT={
     exact:"um so there are two things wrong with the deploy first the auth token expired and second nobody updated the runbook you know",
     tidy:"So there are two things wrong with the deploy: first the auth token expired, and second nobody updated the runbook.",
     organised:"There are two things wrong with the deploy.\nFirst, the auth token expired.\nSecond, nobody updated the runbook.",
-    note:"Two problems with the deploy — the auth token expired, and nobody updated the runbook."
-  };
-  var LABEL = {exact:"Exact words",tidy:"Tidied up",organised:"Organised",note:"As a message"};
+    note:"Two problems with the deploy — the auth token expired, and nobody updated the runbook."};
+  var LABEL={exact:"Exact words",tidy:"Tidied up",organised:"Organised",note:"As a message"};
 
-  var ptt=document.getElementById('ptt'), screen=document.getElementById('screen'),
-      pttLabel=document.getElementById('pttLabel'), cv=document.getElementById('wave'),
-      ctx=cv.getContext('2d'), mode='tidy', held=false, t0=0, raf=0, typing=0;
+  var ptt=document.getElementById('ptt'),screen=document.getElementById('screen'),
+      pttLabel=document.getElementById('pttLabel'),cv=document.getElementById('wave'),
+      ctx=cv.getContext('2d'),mode='tidy',held=false,t0=0,raf=0,timer=0,auto=null,
+      userTouched=false;
   var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
   function sizeCanvas(){var r=cv.getBoundingClientRect(),d=devicePixelRatio||1;
-    cv.width=Math.max(1,r.width*d); cv.height=Math.max(1,r.height*d);
-    ctx.setTransform(d,0,0,d,0,0);}
-  addEventListener('resize',sizeCanvas); sizeCanvas();
+    cv.width=Math.max(1,r.width*d);cv.height=Math.max(1,r.height*d);
+    ctx.setTransform(d,0,0,d,0,0);drawWave(held?0.8:0);}
+  addEventListener('resize',sizeCanvas);
 
   function drawWave(amp){
-    var r=cv.getBoundingClientRect(), w=r.width, h=r.height, mid=h/2;
+    var r=cv.getBoundingClientRect(),w=r.width,h=r.height,mid=h/2;
     ctx.clearRect(0,0,w,h);
-    ctx.strokeStyle=css('--rule'); ctx.lineWidth=1;
-    ctx.beginPath(); ctx.moveTo(0,mid); ctx.lineTo(w,mid); ctx.stroke();
-    if(amp<=0) return;
-    ctx.strokeStyle=css('--accent'); ctx.lineWidth=2; ctx.beginPath();
+    ctx.strokeStyle=css('--rule');ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(0,mid);ctx.lineTo(w,mid);ctx.stroke();
+    if(amp<=0)return;
+    ctx.strokeStyle=css('--accent');ctx.lineWidth=2;ctx.beginPath();
     var now=performance.now()/210;
     for(var x=0;x<=w;x+=2){
       var env=Math.sin(Math.PI*Math.min(1,x/w))*amp;
@@ -276,64 +269,97 @@
     }
     ctx.stroke();
   }
-
-  function setScreen(html){screen.innerHTML=html;}
   function esc(s){return s.replace(/[&<>]/g,function(c){
     return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+  function set(h){screen.innerHTML=h;}
+  function idle(){set('<span class="muted">Hold the button and speak. Let go when you\'re done.</span>');}
 
   function loop(){
-    if(!held) return;
-    var el=(performance.now()-t0);
-    var line=""; for(var i=0;i<SCRIPT.length;i++) if(el>=SCRIPT[i].t) line=SCRIPT[i].s;
-    setScreen('<span class="muted">'+esc(line)+'</span><span class="caret"></span>');
+    if(!held)return;
+    var el=performance.now()-t0,line="";
+    for(var i=0;i<SPEECH.length;i++) if(el>=SPEECH[i].t) line=SPEECH[i].s;
+    set('<span class="muted">'+esc(line)+'</span><span class="caret"></span>');
     drawWave(0.55+0.45*Math.abs(Math.sin(el/300)));
     raf=requestAnimationFrame(loop);
   }
-
   function start(e){
+    if(e){e.preventDefault();userTouched=true;stopAuto();}
+    if(held)return;
+    held=true;t0=performance.now();clearTimeout(timer);
+    ptt.dataset.live="1";ptt.dataset.ping="";pttLabel.innerHTML="Listening";
+    if(reduce){set('<span class="muted">'+esc(SPEECH[SPEECH.length-1].s)+'</span>');}
+    else{set('<span class="caret"></span>');raf=requestAnimationFrame(loop);}
+  }
+  function stop(e,then){
     if(e){e.preventDefault();}
-    if(held) return;
-    held=true; t0=performance.now(); clearTimeout(typing);
-    ptt.dataset.live="1"; pttLabel.innerHTML="Listening";
-    setScreen('<span class="caret"></span>');
-    if(reduce){setScreen('<span class="muted">'+esc(SCRIPT[SCRIPT.length-1].s)+'</span>');}
-    else{raf=requestAnimationFrame(loop);}
+    if(!held)return;
+    held=false;cancelAnimationFrame(raf);drawWave(0);
+    ptt.dataset.live="";pttLabel.innerHTML="Hold<br>to talk";
+    var full=OUT[mode],head='<span class="label" style="margin-bottom:.55em;">'+LABEL[mode]+'</span>';
+    if(reduce){set(head+esc(full).replace(/\n/g,'<br>'));if(then)then();return;}
+    set(head+'<span class="muted">thinking…</span>');
+    var i=0;
+    timer=setTimeout(function type(){
+      i+=2;var part=esc(full.slice(0,i)).replace(/\n/g,'<br>');
+      set(head+part+(i<full.length?'<span class="caret"></span>':''));
+      if(i<full.length){timer=setTimeout(type,15);}else if(then){timer=setTimeout(then,1500);}
+    },560);
   }
 
-  function stop(e){
-    if(e){e.preventDefault();}
-    if(!held) return;
-    held=false; cancelAnimationFrame(raf); drawWave(0);
-    ptt.dataset.live=""; pttLabel.innerHTML="Hold<br>to talk";
-    var full=OUT[mode], head='<span class="label" style="margin-bottom:.6em;">'+LABEL[mode]+'</span>';
-    if(reduce){setScreen(head+esc(full).replace(/\n/g,'<br>')); return;}
-    setScreen(head+'<span class="muted">thinking…</span>');
-    var i=0;
-    typing=setTimeout(function type(){
-      i+=2; var part=esc(full.slice(0,i)).replace(/\n/g,'<br>');
-      setScreen(head+part+(i<full.length?'<span class="caret"></span>':''));
-      if(i<full.length) typing=setTimeout(type,16);
-    },620);
+  /* The page demonstrates itself once, then hands over. A visitor who never
+     touches anything still sees the whole idea; anyone who reaches for the
+     button takes over immediately and the sequence never returns. */
+  function stopAuto(){if(auto){clearTimeout(auto);auto=null;}
+    ptt.dataset.ping="";clearTimeout(timer);
+    if(held){held=false;cancelAnimationFrame(raf);drawWave(0);
+      ptt.dataset.live="";pttLabel.innerHTML="Hold<br>to talk";}}
+
+  function runDemo(){
+    if(userTouched)return;
+    ptt.dataset.ping="1";
+    auto=setTimeout(function(){
+      if(userTouched)return;
+      start();
+      auto=setTimeout(function(){
+        if(userTouched)return;
+        stop(null,function(){
+          if(userTouched)return;
+          set('<span class="muted">Your turn — hold the button.</span>');
+        });
+      },6200);
+    },900);
   }
 
   ptt.addEventListener('pointerdown',start);
-  addEventListener('pointerup',stop);
-  ptt.addEventListener('pointercancel',stop);
+  addEventListener('pointerup',function(e){stop(e);});
+  ptt.addEventListener('pointercancel',function(e){stop(e);});
   ptt.addEventListener('keydown',function(e){
-    if((e.key===' '||e.key==='Enter')&&!e.repeat){e.preventDefault();start();}});
+    if((e.key===' '||e.key==='Enter')&&!e.repeat){e.preventDefault();start(e);}});
   ptt.addEventListener('keyup',function(e){
-    if(e.key===' '||e.key==='Enter'){e.preventDefault();stop();}});
+    if(e.key===' '||e.key==='Enter'){e.preventDefault();stop(e);}});
 
   Array.prototype.forEach.call(document.querySelectorAll('.mode'),function(b){
     b.addEventListener('click',function(){
-      mode=b.dataset.mode;
+      userTouched=true;stopAuto();mode=b.dataset.mode;
       Array.prototype.forEach.call(document.querySelectorAll('.mode'),function(o){
         o.setAttribute('aria-pressed',String(o===b));});
-      setScreen('<span class="ph">Hold the button again to see “'+LABEL[mode].toLowerCase()+'”.</span>');
+      set('<span class="muted">Hold the button to see “'+LABEL[mode].toLowerCase()+'”.</span>');
     });
   });
 
-  drawWave(0);
+  /* staged entrance, then reveal on scroll */
+  var steps=document.querySelectorAll('[data-step]');
+  Array.prototype.forEach.call(steps,function(el,i){
+    setTimeout(function(){el.classList.add('in');},reduce?0:120*i+80);
+  });
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});
+  },{rootMargin:'0px 0px -12% 0px'});
+  Array.prototype.forEach.call(document.querySelectorAll('.rise:not([data-step])'),
+    function(el){io.observe(el);});
+
+  sizeCanvas();idle();
+  setTimeout(runDemo,reduce?400:1100);
 })();
 </script>
 </body>
