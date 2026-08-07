@@ -8,9 +8,7 @@ the standard HID identity and nothing in it is platform-specific.
 
 Everything runs on the device. No cloud, no app, no account.
 
-**New here?** [Read the plain-language introduction](https://claude.ai/code/artifact/31888657-2e4e-432a-b7ea-be653d08de08)
-— what it is and why you'd want one, with a hold-to-talk demo you can try in the
-page. The rest of this file is for building one.
+The rest of this file is for building one.
 
 ## Layout
 
