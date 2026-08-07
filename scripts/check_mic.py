@@ -160,7 +160,11 @@ def record(cfg, seconds: float, out_path: Path) -> int:
     else:
         print(f"  SNR OK ({snr:.0f} dB).")
 
-    print(f"\n  Play it back to confirm it sounds like you:  aplay {out_path}")
+    # This usually runs over ssh, so the file is on the Pi while the speakers are
+    # not. Give the copy-back command too rather than just `aplay`.
+    print("\n  Listen back to confirm it sounds like you:")
+    print(f"    on the Pi:   aplay {out_path}")
+    print(f"    on a Mac:    scp voicekb:{out_path} /tmp/ && afplay /tmp/{out_path.name}")
     return 0 if ok else 2
 
 

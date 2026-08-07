@@ -32,9 +32,15 @@ audio:
   channel_select: null
 
   # Hardware capture volume, applied via `amixer` by scripts/set_gain.sh.
-  # Cheap USB mics ship near-silent; this is the *first* knob to turn because it
-  # amplifies before the ADC noise floor matters as much.
-  alsa_capture_percent: 80
+  # This is the *first* knob to turn, because it amplifies early in the chain and
+  # costs far less SNR than software gain does.
+  #
+  # 62% (step 10/16, 14.88 dB) was measured, not guessed. At 81% this capsule
+  # peaked at -1.6 dBFS on normal speech -- only 1.6 dB from clipping, which
+  # normal speech variation would blow through. Backing off ~4.5 dB puts peaks
+  # near -6 dBFS with headroom to spare, and SNR was 38 dB so there is plenty to
+  # give away. Clipped audio hurts whisper far more than a quieter signal does.
+  alsa_capture_percent: 62
 
   # Software gain applied after capture, as a last resort. This amplifies the
   # noise floor along with your voice, so raise alsa_capture_percent first.

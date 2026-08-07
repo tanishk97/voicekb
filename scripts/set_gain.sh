@@ -5,12 +5,12 @@
 # the signal reaches the noise floor of the rest of the chain, so it costs you
 # far less SNR than software gain does.
 #
-#   scripts/set_gain.sh            # auto-detect the USB capture card, set 80%
+#   scripts/set_gain.sh            # auto-detect the USB capture card, set 62%
 #   scripts/set_gain.sh 1 90       # card 1, 90%
 set -euo pipefail
 
 CARD="${1:-}"
-PERCENT="${2:-80}"
+PERCENT="${2:-62}"
 
 if ! command -v amixer >/dev/null 2>&1; then
   echo "amixer not found. Install with: sudo apt install -y alsa-utils" >&2
