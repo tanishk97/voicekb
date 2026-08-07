@@ -22,10 +22,10 @@ below it is verified on real hardware.
 
 | # | Stage | Verify with | Status |
 |---|-------|-------------|--------|
-| 1 | Audio capture | `tests/test_audio.py`, `scripts/check_mic.py` | **working on hardware**; pending a speech-level check |
+| 1 | Audio capture | `tests/test_audio.py`, `scripts/check_mic.py` | **working**; 38 dB SNR on speech |
 | 2 | VAD segmentation | (tbd) | not started |
 | 3 | whisper.cpp STT | `scripts/bench_whisper.sh` | **working**; base.en-q5_1 at 0.40x realtime |
-| 4 | Bluetooth HID output | (tbd) | not started |
+| 4 | Bluetooth HID output | `voicekb/bt_hid.py --serve` | **working**; typed into macOS over an encrypted link |
 | 5 | LLM reformatting + profiles | (tbd) | not started |
 | 6 | GPIO buttons | (tbd) | not started |
 
