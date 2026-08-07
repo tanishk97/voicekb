@@ -98,9 +98,15 @@ stt:
     "voice cabey": voicekb
 
 llm:
-  # AI-cleaned is the DEFAULT mode; "raw" is the toggle-to fallback.
   enabled: true
-  profile: clean          # clean | slack | commit | email | raw
+  # AI-shaped output is the default, per the original design. 'structured'
+  # rather than 'clean' because clean no longer calls the model at all --
+  # its filler removal is deterministic. structured is the profile built to
+  # preserve every point rather than compress, measured at 0.88 overlap.
+  #
+  # Costs roughly 1.5-6s per utterance on top of whisper. Say 'clean mode'
+  # or 'raw mode' to drop back without restarting.
+  profile: structured     # clean | slack | commit | email | structured | raw
   base_url: http://127.0.0.1:8080
   model: models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf
   binary: vendor/llama.cpp/build/bin/llama-server

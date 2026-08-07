@@ -87,9 +87,10 @@ class SttConfig:
 
 @dataclass(frozen=True)
 class LlmConfig:
-    # AI-cleaned is the default mode; "raw" is the toggle-to fallback.
     enabled: bool = True
-    profile: str = "clean"
+    # AI-shaped output is the default, per the original design. Not "clean",
+    # which no longer calls the model -- its filler removal is deterministic.
+    profile: str = "structured"
     base_url: str = "http://127.0.0.1:8080"
     model: str = "models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
     binary: str = "vendor/llama.cpp/build/bin/llama-server"
