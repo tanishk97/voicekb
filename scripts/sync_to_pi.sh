@@ -17,19 +17,30 @@ fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# --delete keeps the Pi a mirror of the repo, which means anything present only
-# on the Pi is destroyed. Build outputs and model weights live only on the Pi, so
-# the exclude list is load-bearing, not cosmetic.
+# --delete keeps the Pi a mirror of the repo, which means anything living only on
+# the Pi is destroyed unless explicitly spared. The venv, the whisper.cpp build,
+# and the model weights all live only on the Pi and cost minutes to rebuild.
 #
-# It is driven from .gitignore rather than a hand-maintained list: a second copy
-# of that list will drift, and the failure mode is silent destruction of a
-# multi-minute build. (rsync does not delete excluded files unless you also pass
-# --delete-excluded, which we deliberately do not.)
+# Each of those gets TWO rules, deliberately:
+#   P  protect from deletion at the destination
+#   -  exclude from transfer
+#
+# An earlier version relied on `--filter=':- .gitignore'` to cover this. It did
+# not: `.venv/` was listed in .gitignore and got deleted anyway, leaving only the
+# `__pycache__` directories that happened to match a different rule. Inferring
+# deletion safety from gitignore semantics is too subtle to pair with --delete,
+# so these are spelled out.
+#
+# The leading slash anchors each pattern to the transfer root, so a stray
+# directory of the same name deeper in the tree is not silently spared.
 rsync -av --delete \
-  --filter=':- .gitignore' \
+  --filter='P /.venv/' --filter='- /.venv/' \
+  --filter='P /.venv-dev/' --filter='- /.venv-dev/' \
+  --filter='P /vendor/' --filter='- /vendor/' \
+  --filter='P /models/' --filter='- /models/' \
   --exclude '.git/' \
-  --exclude 'vendor/' \
-  --exclude 'models/' \
+  --exclude '__pycache__/' \
+  --exclude '*.wav' \
   "$REPO_ROOT/" "$PI_HOST:$PI_PATH/"
 
 echo
