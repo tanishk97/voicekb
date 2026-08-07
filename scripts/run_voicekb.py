@@ -27,6 +27,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from voicekb.audio import open_source  # noqa: E402
 from voicekb.bt_hid import BluetoothHIDKeyboard  # noqa: E402
+from voicekb.commands import KeyCommand, ProfileCommand  # noqa: E402
+from voicekb.commands import describe as describe_command  # noqa: E402
+from voicekb.commands import parse as parse_command  # noqa: E402
 from voicekb.config import DEFAULT_CONFIG, Config  # noqa: E402
 from voicekb.stt import WhisperSTT  # noqa: E402
 from voicekb.llm import LlamaReformatter  # noqa: E402
@@ -56,7 +59,7 @@ def transcribe_worker(
     trailing_space: bool,
     dry_run: bool,
     llm: LlamaReformatter | None,
-    profile: str,
+    profile_ref: list,
     substitutions: dict[str, str],
 ) -> None:
     while not _stop.is_set():
@@ -83,9 +86,27 @@ def transcribe_worker(
         # anything that was not on the filler list.
         # Known mis-transcriptions first: fix the words, then remove filler,
         # so a substituted term is present before anything else reasons about it.
+        profile = profile_ref[0]
         text = apply_substitutions(result.text, substitutions)
         if text != result.text:
             _log(f"  substituted: {result.text!r} -> {text!r}")
+        # A whole-utterance command is acted on, never typed. Partial matches
+        # deliberately fall through: 'press enter your name' is a sentence.
+        cmd = parse_command(text)
+        if cmd is not None:
+            _log(f"  command: {describe_command(cmd)}")
+            if isinstance(cmd, ProfileCommand):
+                profile_ref[0] = cmd.profile
+                _log(f"  profile is now {cmd.profile!r}")
+            elif isinstance(cmd, KeyCommand) and not dry_run:
+                try:
+                    if not kb.press_named(cmd.key, cmd.modifiers, cmd.count):
+                        _log(f"  unknown key {cmd.key!r}")
+                except Exception as exc:  # noqa: BLE001
+                    _log(f"  key send failed: {exc}")
+                    _disconnected.set()
+            continue
+
         before_fillers = text
         if profile != "raw":
             text = strip_fillers(text)
@@ -178,7 +199,11 @@ def main() -> int:
     # is the deliberate fallback rather than the starting point.
     profile = args.profile or cfg.llm.profile
     llm: LlamaReformatter | None = None
-    if cfg.llm.enabled and not args.no_llm and profile != "raw":
+    # Built regardless of the STARTING profile, because a spoken "commit mode"
+    # can switch into an LLM-backed profile later. Gating on the initial profile
+    # would leave the client None and the switch would silently do nothing.
+    # reformat() already no-ops for profiles whose uses_llm is False.
+    if cfg.llm.enabled and not args.no_llm:
         llm = LlamaReformatter(
             base_url=cfg.llm.base_url,
             timeout_s=cfg.llm.timeout_s,
@@ -195,7 +220,12 @@ def main() -> int:
                  "typing raw transcription")
             _log("  start it with: bash scripts/serve_llm.sh --service")
             llm = None
-    _log(f"profile: {profile}" + ("" if llm is not None else "  (LLM bypassed)"))
+    # One-element list so the worker thread and spoken commands share it.
+    profile_ref = [profile]
+    from voicekb.llm import PROFILES as _PROFILES
+    _uses = llm is not None and _PROFILES[profile].uses_llm
+    _log(f"profile: {profile}" + ("" if _uses else "  (no model in this profile)"))
+    _log("say e.g. 'slack mode' or 'press enter' to command it")
 
     kb = BluetoothHIDKeyboard(key_delay_s=args.delay_ms / 1000.0)
     if not args.dry_run:
@@ -211,7 +241,7 @@ def main() -> int:
     worker = threading.Thread(
         target=transcribe_worker,
         args=(work, stt, kb, sr, not args.no_trailing_space, args.dry_run,
-              llm, profile, dict(cfg.stt.substitutions)),
+              llm, profile_ref, dict(cfg.stt.substitutions)),
         daemon=True,
     )
     worker.start()
