@@ -92,6 +92,12 @@ Wants=voicekb-llm.service
 [Service]
 # Root is required to bind L2CAP PSMs 17 and 19.
 User=root
+# Wait for the USB audio device to enumerate before starting. sound.target
+# fires before USB probing finishes, so on a cold boot the pipeline raced the
+# mic and restarted 4 times before catching it. Kept in a separate script
+# because systemd treats $ and % as specifiers: an inline $(seq ...) fails
+# with "bad unit file setting", which names nothing useful.
+ExecStartPre=/bin/bash $REPO_ROOT/scripts/wait_for_mic.sh 30
 WorkingDirectory=$REPO_ROOT
 ExecStart=$PY -u $REPO_ROOT/scripts/run_voicekb.py
 Restart=on-failure

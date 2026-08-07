@@ -24,7 +24,7 @@ below it is verified on real hardware.
 |---|-------|-------------|--------|
 | 1 | Audio capture | `tests/test_audio.py`, `scripts/check_mic.py` | **working**; 38 dB SNR on speech |
 | 2 | VAD segmentation | `scripts/transcribe_file.py` | **working**; webrtcvad, offline-tunable |
-| 3 | whisper.cpp STT | `scripts/bench_whisper.sh` | **working**; base.en-q5_1 at 0.40x realtime |
+| 3 | whisper.cpp STT | `scripts/bench_whisper.sh` | **working**; base.en-q5_1 at 0.29x realtime (cooled) |
 | 4 | Bluetooth HID output | `voicekb/bt_hid.py --serve` | **working**; typed into macOS over an encrypted link |
 | 5 | LLM reformatting + profiles | `scripts/bench_llm.py` | **working**; Qwen2.5-1.5B, 0.7-2.1s |
 | — | **End-to-end speak-to-type** | `scripts/run_voicekb.py` | **working** |
@@ -99,11 +99,12 @@ occurred. The 15W supply is under the Pi 5's 5V/5A spec. Under-voltage risks SD
 corruption, which is a worse failure than heat, so a 27W USB-C PD supply is the
 higher-priority purchase of the two.
 
-**Known issue: thermals.** With no active cooler, building llama.cpp peaked at
-77 °C (no throttle, 16 min of CPU), and an earlier small.en run hit 81.8 °C and
-tripped the soft limit. Do not build and run inference at the same time —
-`setup_llama.sh` now holds one core back for this reason. An active cooler is
-the real fix and would also reopen small.en as an option.
+**Thermals: solved.** An active cooler was fitted on 2026-08-07 (`pwm-fan`,
+`max_state=4`, detected as the `cooling_fan` platform device). Idle dropped from
+roughly 47-50 °C to 33 °C, and a full three-model whisper benchmark peaked at
+52 °C with `throttled` never leaving `0x0`. Previously `small.en` alone reached
+81.8 °C and tripped the soft limit. `setup_llama.sh` still holds one core back
+during builds, which now costs little.
 
 **Known issue: VAD false triggers.** Room noise opens utterances that whisper
 returns as `(crickets chirping)` or `[BLANK_AUDIO]`. They are discarded
@@ -212,6 +213,10 @@ bash scripts/bench_whisper.sh /tmp/speech.wav
 ```
 
 ### Model choice: base.en-q5_1, decided by measurement
+
+> **Re-measured 2026-08-07 after fitting an active cooler.** The thermal
+> objection to `small.en` is gone, but the latency one is not. See
+> "What the cooler changed" below. `base.en-q5_1` remains the default.
 
 Benchmarked on this Pi 5 against a 6-second recording, 4 threads, no active
 cooler:
@@ -416,6 +421,34 @@ stt:
   substitutions:
     "voice he be": voicekb
 ```
+
+### What the cooler changed
+
+Re-benchmarked on the same Pi with an active cooler fitted (`pwm-fan`,
+`max_state=4`), against whisper.cpp's 11-second `jfk.wav`, beam 5:
+
+| Model | Before (passive) | After (cooled) | Peak temp |
+|-------|------------------|----------------|-----------|
+| base.en-q5_1 | 0.41x | **0.29x** | 45.0 °C |
+| small.en-q5_1 | 3.27x | **0.94x** | 51.6 °C |
+| tiny.en-q5_1 | ~0.18x | **0.13x** | 52.1 °C |
+
+`throttled` stayed `0x0` for the entire run — no throttling of any kind, where
+`small.en` previously reached 81.8 °C and tripped the soft limit.
+
+**`small.en` got 3.5x faster from cooling alone.** Its earlier 3.27x figure was
+not the model being slow; it was the model being throttled mid-run. Idle
+temperature also fell from roughly 47-50 °C to 33 °C.
+
+So `small.en` is now viable where it previously was not — it finishes inside
+realtime. It is still **3.2x slower than base.en**, which on a 10-second
+utterance is about seven extra seconds of waiting. On this test clip both
+transcribed the sentence correctly; `small.en` punctuated it slightly better.
+
+The default stays `base.en-q5_1`, because seven seconds per utterance is a large
+price for punctuation. But this is now a genuine tradeoff rather than a thermal
+impossibility — switch `stt.model` if accuracy ever becomes the bottleneck, for
+instance with technical vocabulary.
 
 ## Hardware notes
 
