@@ -1,8 +1,16 @@
 # AiMicrophone
 
 Speak into a mic on a Raspberry Pi 5; the Pi transcribes locally, optionally
-reshapes the text with a small local LLM, and types the result into a MacBook as
-a Bluetooth HID keyboard. The Mac sees an ordinary keyboard.
+reshapes the text with a small local LLM, and types the result into **whatever
+you are using** as a Bluetooth HID keyboard — verified on macOS and iOS, and
+expected to work anywhere that accepts a keyboard, since the device advertises
+the standard HID identity and nothing in it is platform-specific.
+
+Everything runs on the device. No cloud, no app, no account.
+
+**New here?** [Read the plain-language introduction](https://claude.ai/code/artifact/31888657-2e4e-432a-b7ea-be653d08de08)
+— what it is and why you'd want one, with a hold-to-talk demo you can try in the
+page. The rest of this file is for building one.
 
 ## Layout
 
