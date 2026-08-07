@@ -83,7 +83,7 @@ class LlmConfig:
     enabled: bool = True
     profile: str = "clean"
     base_url: str = "http://127.0.0.1:8080"
-    model: str = "models/Llama-3.2-1B-Instruct-Q4_K_M.gguf"
+    model: str = "models/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
     binary: str = "vendor/llama.cpp/build/bin/llama-server"
     threads: int = 4
     context_size: int = 2048
