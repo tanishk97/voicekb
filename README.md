@@ -24,7 +24,7 @@ below it is verified on real hardware.
 |---|-------|-------------|--------|
 | 1 | Audio capture | `tests/test_audio.py`, `scripts/check_mic.py` | **working on hardware**; pending a speech-level check |
 | 2 | VAD segmentation | (tbd) | not started |
-| 3 | whisper.cpp STT | (tbd) | not started |
+| 3 | whisper.cpp STT | `scripts/bench_whisper.sh` | **working**; base.en-q5_1 at 0.40x realtime |
 | 4 | Bluetooth HID output | (tbd) | not started |
 | 5 | LLM reformatting + profiles | (tbd) | not started |
 | 6 | GPIO buttons | (tbd) | not started |
@@ -114,6 +114,46 @@ Downstream code consumes 16 kHz mono int16 frames and knows nothing about the
 microphone. Moving to a ReSpeaker-style array is a `config/default.yaml` edit:
 raise `channels`, set `channel_select` to the array's beamformed output channel,
 and point `device` at the new card. No code below `voicekb/audio.py` changes.
+
+## Stage 3: whisper.cpp STT
+
+```bash
+bash scripts/setup_whisper.sh              # build + fetch models
+bash scripts/bench_whisper.sh /tmp/speech.wav
+```
+
+### Model choice: base.en-q5_1, decided by measurement
+
+Benchmarked on this Pi 5 against a 6-second recording, 4 threads, no active
+cooler:
+
+| Model | Decoding | Wall time | Realtime factor | Peak SoC temp |
+|-------|----------|-----------|-----------------|---------------|
+| base.en-q5_1 | greedy | 2.40s | **0.40x** | 56 °C |
+| base.en-q5_1 | beam 5 | 2.46s | **0.41x** | 60 °C |
+| small.en-q5_1 | greedy | 35.22s | 5.87x | 75 °C |
+| small.en-q5_1 | beam 5 | 19.61s | 3.27x | 82 °C |
+
+`base.en-q5_1` wins on every axis that matters here. It transcribed the test
+clip correctly, runs at 0.4x realtime — transcription finishes well before you
+could have re-spoken the sentence — and stays cool.
+
+`small.en` is not viable on this hardware. Beyond being 8x slower, it drove the
+SoC to 81.8 °C and tripped the soft thermal limit: `vcgencmd get_throttled`
+returned `0x80000` (bit 19, "soft temperature limit has occurred"). That is the
+predicted no-active-cooler throttling showing up for real. Revisit only with
+active cooling, and even then the latency is likely disqualifying for dictation.
+
+Two details worth remembering:
+
+- **Beam search is free at this size.** base.en costs 0.06s more for beam 5 than
+  greedy, so there is no reason to give up the accuracy. The default should be
+  beam search.
+- **The 35s small.en greedy figure is misleading.** It was the first run, so it
+  paid to read a 182 MB model off the microSD with a cold page cache. The 19.6s
+  beam figure that followed is the warmer, fairer number. Model load time from
+  SD is real and argues for keeping whisper resident rather than re-spawning it
+  per utterance.
 
 ## Hardware notes
 
