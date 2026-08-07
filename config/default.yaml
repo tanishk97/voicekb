@@ -65,7 +65,7 @@ vad:
   # perceived latency: nothing downstream runs until the utterance closes, so
   # every millisecond here is added to every dictation. Too short, though, and
   # normal mid-sentence pauses split one thought into two.
-  silence_ms: 700
+  silence_ms: 1200
   # Audio retained from before the trigger fired. Without it the first syllable
   # is reliably lost, because by the time enough speech frames accumulate to
   # trigger, that syllable has already gone past.

@@ -125,12 +125,14 @@ def strip_fillers(text: str) -> str:
     out = re.sub(r"\s+([,.?!])", r"\1", out)
     out = re.sub(r"^[\s,]+", "", out)
     out = collapse_whitespace(out)
-    # Restore a capital if stripping a leading filler exposed a lowercase start.
-    #
-    # Gated on the source containing any uppercase at all, because whisper
-    # sometimes returns entirely lowercase text. Capitalising only the first word
-    # of an all-lowercase transcript would look like a typo rather than a fix.
-    if out and out[:1].islower() and any(c.isupper() for c in text):
+    # Restore a capital ONLY if a leading filler was actually removed. Doing it
+    # unconditionally re-capitalises text we never touched, which turns a
+    # mid-sentence continuation ("processor and second...") into a fake sentence
+    # start. Also gated on the source containing uppercase at all, since whisper
+    # sometimes returns entirely lowercase text where a lone capital looks wrong.
+    removed_leading = not text.lstrip().lower().startswith(out[:12].lower()) if out else False
+    if (out and removed_leading and out[:1].islower()
+            and any(c.isupper() for c in text)):
         out = out[0].upper() + out[1:]
     return out
 

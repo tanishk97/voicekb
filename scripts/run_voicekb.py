@@ -84,7 +84,9 @@ def transcribe_worker(
                 # Log all three outcomes. Logging only changes made "no line at
                 # all" mean either "left it alone" or "rewrite rejected", which
                 # are very different and indistinguishable in the journal.
-                if shaped.rejected:
+                if not shaped.elapsed_seconds and not shaped.changed:
+                    pass  # profile does not use the model; nothing to report
+                elif shaped.rejected:
                     _log(f"  llm[{profile}] {shaped.elapsed_seconds:.1f}s "
                          f"REJECTED (overlap {shaped.overlap:.2f}); typing raw")
                 elif shaped.changed:
@@ -236,8 +238,13 @@ def main() -> int:
                 # require restarting the service.
                 _disconnected.clear()
                 seg = VadSegmenter(cfg.vad, sr, cfg.audio.frame_ms)
-                _log("host disconnected; waiting for it to reconnect ...")
-                host = kb.accept()
+                # Try dialling the host back before falling back to waiting.
+                # macOS keeps the baseband ACL link open and believes it is still
+                # connected, so it never reopens the L2CAP channels -- leaving us
+                # stuck in accept() while the Mac shows a live connection. A real
+                # keyboard initiates its own reconnection; so do we now.
+                _log(f"host disconnected; dialling {host} back ...")
+                host = kb.connect_or_accept(host)
                 _log(f"reconnected to {host}")
                 time.sleep(1.0)
     except KeyboardInterrupt:

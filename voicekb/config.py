@@ -46,7 +46,7 @@ class VadConfig:
     # Silence this long closes it. Too short splits sentences at natural pauses;
     # too long makes the whole pipeline feel laggy, since nothing runs until the
     # utterance closes.
-    silence_ms: int = 700
+    silence_ms: int = 1200
     # Audio kept from before the trigger, so the first syllable is not lost.
     pre_roll_ms: int = 300
     # Anything shorter is a cough or a keyboard clack, not speech.
