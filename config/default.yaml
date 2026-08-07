@@ -73,6 +73,12 @@ vad:
   min_utterance_ms: 400
   max_utterance_s: 30
 
+  # Reject utterances quieter than this (RMS dBFS) before spending whisper on
+  # them. webrtcvad triggers on spectral shape, not loudness, so quiet room
+  # noise opens utterances that come back as "(crickets chirping)". Measured
+  # noise floor ~-53 dBFS, speech ~-15 dBFS, so this sits in a wide gap.
+  min_level_dbfs: -42
+
 stt:
   model: models/ggml-base.en-q5_1.bin
   binary: vendor/whisper.cpp/build/bin/whisper-cli

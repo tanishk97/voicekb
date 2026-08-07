@@ -26,7 +26,7 @@ below it is verified on real hardware.
 | 2 | VAD segmentation | `scripts/transcribe_file.py` | **working**; webrtcvad, offline-tunable |
 | 3 | whisper.cpp STT | `scripts/bench_whisper.sh` | **working**; base.en-q5_1 at 0.40x realtime |
 | 4 | Bluetooth HID output | `voicekb/bt_hid.py --serve` | **working**; typed into macOS over an encrypted link |
-| 5 | LLM reformatting + profiles | (tbd) | not started |
+| 5 | LLM reformatting + profiles | `voicekb/llm.py` | written, **never run** — llama.cpp build incomplete |
 | — | **End-to-end speak-to-type** | `scripts/run_voicekb.py` | **working** |
 | 6 | GPIO buttons | (tbd) | not started |
 
@@ -34,6 +34,48 @@ Stage 4 lands before stage 5 deliberately: an end-to-end path of
 *speak -> transcribe -> type* is the useful milestone, and the LLM layer is
 optional by design. Wiring the optional layer before the required one would mean
 debugging both at once.
+
+## Where this left off (2026-08-07)
+
+End-to-end dictation works: speak at the Pi, text appears on the Mac.
+
+Picking it back up:
+
+```bash
+ssh voicekb
+cd ~/AiMicrophone
+sudo systemd-run --unit=voicekb --working-directory=$PWD \
+  ./.venv/bin/python -u scripts/run_voicekb.py
+journalctl -u voicekb -f          # watch it work
+```
+
+Then connect `voicekb` from the Mac's Bluetooth menu.
+
+**In progress, not yet run on hardware:**
+
+- `scripts/setup_llama.sh` — llama.cpp build was **stopped part way** (~13%) to
+  let the Pi cool. Re-run it; the build is incremental so it resumes.
+- `voicekb/llm.py` — profiles (clean/slack/commit/email/raw) written and
+  compiling, but never executed. It expects a resident `llama-server`, which
+  `setup_llama.sh` does not build yet — its `--target` is `llama-cli` only.
+  **Fix that target before running.**
+- The VAD energy gate (`vad.min_level_dbfs`) is written and unit-clean but has
+  not seen live audio.
+
+**Known issue: thermals.** With no active cooler, compiling llama.cpp while the
+pipeline ran took the SoC to 72 °C, and an earlier small.en run hit 81.8 °C and
+tripped the soft limit. Do not build and run inference at the same time. An
+active cooler is the real fix and would also reopen small.en as an option.
+
+**Known issue: VAD false triggers.** Room noise opens utterances that whisper
+returns as `(crickets chirping)` or `[BLANK_AUDIO]`. They are discarded
+correctly, but each costs ~2.5s of whisper first. The energy gate above is the
+intended fix; if it is not enough, raise `vad.aggressiveness` from 2 to 3.
+
+**Known cosmetic issue:** macOS shows a "Keyboard Setup Assistant" on connect,
+asking for a keypress to identify the layout. Typing works regardless — quit the
+dialog. Fixing it properly means having the Pi send the key right of left Shift
+(`Z` on ANSI) on demand, which needs a control channel into the running daemon.
 
 ## Stage 0: provisioning the Pi
 

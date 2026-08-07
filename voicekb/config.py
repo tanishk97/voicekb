@@ -53,6 +53,13 @@ class VadConfig:
     min_utterance_ms: int = 400
     # Safety cap so a noisy room cannot buffer forever.
     max_utterance_s: float = 30.0
+    # Reject utterances quieter than this (RMS dBFS) without transcribing them.
+    # webrtcvad classifies on spectral shape rather than loudness, so quiet room
+    # noise can open an utterance; observed as whisper returning "(crickets
+    # chirping)". Those are discarded downstream anyway, but only after ~2.5s of
+    # whisper each. Measured noise floor is about -53 dBFS and speech about
+    # -15 dBFS, so this sits in a wide gap.
+    min_level_dbfs: float = -42.0
 
     def __post_init__(self) -> None:
         if not 0 <= self.aggressiveness <= 3:

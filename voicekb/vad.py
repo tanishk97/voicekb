@@ -22,6 +22,7 @@ from enum import Enum
 
 import numpy as np
 
+from .audio import dbfs
 from .config import VadConfig
 
 
@@ -51,6 +52,8 @@ class VadSegmenter:
         self._silence_window = deque(maxlen=max(1, cfg.silence_ms // frame_ms))
 
         self.state = State.IDLE
+        self.rejected_short = 0
+        self.rejected_quiet = 0
         self._utterance: list[np.ndarray] = []
         self._frames_in_utterance = 0
         self._max_frames = int(cfg.max_utterance_s * 1000 / frame_ms)
@@ -99,8 +102,23 @@ class VadSegmenter:
         self._start_window.clear()
         self._pre_roll.clear()
         if len(frames) < self._min_frames:
+            self.rejected_short += 1
             return None  # a cough, a door, a keyboard clack
-        return np.concatenate(frames)
+        audio = np.concatenate(frames)
+
+        # Energy gate. webrtcvad classifies on spectral shape, not loudness, so
+        # quiet room noise can look enough like speech to open an utterance --
+        # observed in practice as whisper returning "(crickets chirping)" and
+        # "[BLANK_AUDIO]". Those get discarded downstream anyway, but only after
+        # paying ~2.5s of whisper for each. Rejecting on level here is free.
+        #
+        # The gap this sits in is wide: measured noise floor is about -53 dBFS
+        # and speech about -15 dBFS.
+        level = dbfs(audio)
+        if level < self.cfg.min_level_dbfs:
+            self.rejected_quiet += 1
+            return None
+        return audio
 
     def flush(self) -> np.ndarray | None:
         """End any in-progress utterance, e.g. on shutdown."""
