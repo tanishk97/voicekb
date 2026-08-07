@@ -9,7 +9,11 @@ sudo apt update
 # alsa-utils    -> arecord/aplay/amixer, for verifying capture outside Python
 # libportaudio2 -> the backend sounddevice binds to
 # python3-venv  -> Pi OS Lite ships python3 without venv
-sudo apt install -y alsa-utils libportaudio2 python3-venv python3-dev git
+# python3-dbus/python3-gi are needed by voicekb/bt_hid.py to register the HID
+# SDP record over BlueZ's D-Bus API. They are apt-only (no usable wheels), so
+# the venv is created with --system-site-packages to see them.
+sudo apt install -y alsa-utils libportaudio2 python3-venv python3-dev git \
+  python3-dbus python3-gi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"

@@ -79,8 +79,17 @@ def main() -> int:
                 print(f"          WARNING untypeable after normalization: {bad}")
 
     print(f"\n{'=' * 72}\nPROMPT INJECTION CHECK")
+    # Must run under a profile that actually calls the model. 'clean' is
+    # deterministic now (uses_llm=False), so probing it short-circuits and
+    # proves nothing -- it would report the input unchanged and look like a
+    # pass. Pick the first LLM-backed profile being tested.
+    probe = next((p for p in wanted if PROFILES[p].uses_llm), None)
+    if probe is None:
+        print("skipped: none of the selected profiles use the model")
+        return 0
+    print(f"profile: {probe}  (floor {PROFILES[probe].min_overlap})")
     print(f"IN : {INJECTION!r}")
-    out = llm.reformat(INJECTION, "clean")
+    out = llm.reformat(INJECTION, probe)
     typed = normalize_for_hid(out.text)
     print(f"OUT: {typed!r}")
     if out.rejected:
