@@ -189,9 +189,12 @@ def main() -> int:
         probe.stop()
     except Exception as exc:  # noqa: BLE001
         _log(f"FATAL: cannot open audio device {cfg.audio.device!r}: {exc}")
-        _log("  list devices with: ./.venv/bin/python scripts/check_mic.py --list")
-        _log("  if running as root, the device must be in /etc/asound.conf, not "
-             "~/.asoundrc -- run scripts/setup_alsa.sh")
+        _log("  Most likely another process holds the capture device. Check with:")
+        _log("    arecord -l                 # 'Subdevices: 0/1' means it is taken")
+        _log("    sudo fuser -v /dev/snd/pcmC*D0c")
+        _log("  PipeWire is the usual culprit; scripts/setup_alsa.sh masks it.")
+        _log("  Otherwise: ./.venv/bin/python scripts/check_mic.py --list, and note")
+        _log("  that as root the device must be in /etc/asound.conf, not ~/.asoundrc.")
         return 1
     _log("  mic OK")
 

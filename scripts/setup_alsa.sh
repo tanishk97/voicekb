@@ -62,6 +62,30 @@ pcm.voicekbmic {
 EOF
 
 echo "Wrote $ASOUNDRC pointing voicekbmic -> hw:${CARD},0"
+
+# PipeWire starts with the user session (an SSH login is enough) and grabs the
+# USB capture device, after which the root-run pipeline cannot open it at all:
+# `arecord -l` shows "Subdevices: 0/1" and PortAudio reports the device as
+# simply absent -- "No input device matching 'voicekbmic'", which points at the
+# wrong problem entirely.
+#
+# This cost a crash-loop that only appeared after a reboot, because until then
+# no user session had started. A headless dictation appliance has no use for a
+# desktop audio server, so mask it.
+echo
+echo "=== masking PipeWire (it holds the capture device exclusively) ==="
+sudo systemctl --global mask pipewire.service pipewire.socket \
+  pipewire-pulse.service pipewire-pulse.socket wireplumber.service >/dev/null 2>&1 || true
+systemctl --user stop pipewire.service pipewire.socket pipewire-pulse.service \
+  pipewire-pulse.socket wireplumber.service >/dev/null 2>&1 || true
+pkill -u "$(id -un)" -f "pipewire|wireplumber" >/dev/null 2>&1 || true
+sleep 1
+if command -v fuser >/dev/null 2>&1 && sudo fuser /dev/snd/pcmC${CARD}D0c >/dev/null 2>&1; then
+  echo "WARNING: something still holds the capture device:" >&2
+  sudo fuser -v /dev/snd/pcmC${CARD}D0c 2>&1 | tail -2 >&2
+else
+  echo "capture device is free"
+fi
 echo
 echo "Verify PortAudio can see it:"
 echo "  ./.venv/bin/python scripts/check_mic.py --list"
