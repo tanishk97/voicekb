@@ -66,7 +66,7 @@ follow an older guide expecting `custom.toml`, your settings will not be applied
 |---|---|
 | OS | Raspberry Pi OS Lite (64-bit), Debian 13 Trixie |
 | Hostname | `voicekb` (reachable as `voicekb.local`) |
-| User | `tanishk` (pick your own) |
+| User | `pi` (pick your own) |
 | SSH | public-key only |
 | Wi-Fi country | **US — must be set, or the radio stays disabled** |
 
@@ -78,7 +78,7 @@ Add a convenience alias on the Mac in `~/.ssh/config`:
 ```
 Host voicekb
   HostName voicekb.local
-  User tanishk
+  User pi
   IdentityFile ~/.ssh/id_ed25519_pi
 ```
 
@@ -105,7 +105,7 @@ the git history lives and where you will edit), then push it over:
 
 ```bash
 # on the Mac, from the repo root
-PI_HOST=tanishk@voicekb.local scripts/sync_to_pi.sh
+PI_HOST=pi@voicekb.local scripts/sync_to_pi.sh
 ```
 
 See [WORKFLOW.md](WORKFLOW.md) for why the code lives on the Mac and why you

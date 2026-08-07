@@ -29,7 +29,7 @@ flowchart LR
 Pi.** Push with:
 
 ```bash
-PI_HOST=tanishk@voicekb.local scripts/sync_to_pi.sh
+PI_HOST=pi@voicekb.local scripts/sync_to_pi.sh
 ```
 
 Set `PI_HOST` once in your shell profile to avoid repeating it. `PI_PATH`
@@ -40,7 +40,7 @@ silently discards anything that exists only there. There is no merge, no
 warning, and no way to get it back.
 
 The Pi is reachable as `voicekb.local` over mDNS, aliased to `ssh voicekb`, user
-`tanishk`, public-key auth only via `~/.ssh/id_ed25519_pi`.
+`pi` (or whatever you chose), public-key auth only via `~/.ssh/id_ed25519_pi`.
 
 > When scanning the LAN for the Pi, match on `voicekb.local` or a Debian SSH
 > banner. Do **not** match on "port 22 is open" — other hosts answer there too,

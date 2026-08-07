@@ -106,7 +106,7 @@ Wi-Fi and accepts SSH on first boot with no monitor attached.
 |---------|-------|
 | OS | Raspberry Pi OS Lite (64-bit), Debian 13 Trixie |
 | Hostname | `voicekb` (reachable as `voicekb.local`) |
-| User | `tanishk` |
+| User | `pi` (whatever you set in Imager) |
 | SSH | public-key only, `~/.ssh/id_ed25519_pi` |
 | Wi-Fi country | **US** — must be set, or the radio stays disabled |
 
