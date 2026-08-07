@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-dev/
 venv/
 
 # Model weights -- multi-GB, fetched by scripts, never committed.

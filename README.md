@@ -22,7 +22,7 @@ below it is verified on real hardware.
 
 | # | Stage | Verify with | Status |
 |---|-------|-------------|--------|
-| 1 | Audio capture | `scripts/check_mic.py` | scaffolded, **not yet run on hardware** |
+| 1 | Audio capture | `tests/test_audio.py`, `scripts/check_mic.py` | logic tested; **not yet run on the Pi or the USB mic** |
 | 2 | VAD segmentation | (tbd) | not started |
 | 3 | whisper.cpp STT | (tbd) | not started |
 | 4 | Bluetooth HID output | (tbd) | not started |
@@ -72,6 +72,10 @@ bash scripts/set_gain.sh                          # hardware capture gain
 Run `check_mic.py` twice — once in silence to measure the noise floor, once
 speaking normally. It reports peak level, noise floor, and SNR, and tells you
 which gain knob to turn.
+
+`tests/test_audio.py` covers the pure logic and needs no microphone, so run it
+first. If it passes and the mic still sounds wrong, the fault is in the device
+or ALSA layer rather than in this code — which narrows the search a lot.
 
 ### Why gain order matters
 
