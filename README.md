@@ -60,12 +60,24 @@ bash scripts/serve_llm.sh --service    # ~8s to load Qwen2.5-1.5B
 Without it the pipeline still runs and types the raw transcription, logging a
 warning.
 
-**Not yet run on hardware:**
+Confirmed working end-to-end in real use: an 18.5-second spoken sentence was
+captured whole, transcribed in 3.7s, and typed into macOS verbatim.
 
+**Not yet exercised in real use:**
+
+- The `slack`, `commit` and `email` profiles — verified via `bench_llm.py` on
+  fixed transcripts, but never driven by live speech. Start with
+  `--profile commit`.
 - The VAD energy gate (`vad.min_level_dbfs`) is unit-clean but has not seen live
   audio.
-- The full pipeline has not been run end-to-end *with the LLM enabled* — each
-  half is verified separately.
+- Outbound reconnect (`bt_hid.connect_or_accept`) is written but has not yet had
+  to fire.
+
+**Known issue: marginal power supply.** `vcgencmd get_throttled` reported
+`0x50000` after the llama.cpp build — under-voltage *and* throttling have
+occurred. The 15W supply is under the Pi 5's 5V/5A spec. Under-voltage risks SD
+corruption, which is a worse failure than heat, so a 27W USB-C PD supply is the
+higher-priority purchase of the two.
 
 **Known issue: thermals.** With no active cooler, building llama.cpp peaked at
 77 °C (no throttle, 16 min of CPU), and an earlier small.en run hit 81.8 °C and
