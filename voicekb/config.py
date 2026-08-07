@@ -37,10 +37,50 @@ class AudioConfig:
 
 
 @dataclass(frozen=True)
+class VadConfig:
+    # webrtcvad aggressiveness, 0-3. Higher rejects more non-speech but starts
+    # clipping quiet syllables. 2 is a reasonable middle for a clean signal.
+    aggressiveness: int = 2
+    # Speech must persist this long before an utterance opens (anti-click).
+    start_ms: int = 150
+    # Silence this long closes it. Too short splits sentences at natural pauses;
+    # too long makes the whole pipeline feel laggy, since nothing runs until the
+    # utterance closes.
+    silence_ms: int = 700
+    # Audio kept from before the trigger, so the first syllable is not lost.
+    pre_roll_ms: int = 300
+    # Anything shorter is a cough or a keyboard clack, not speech.
+    min_utterance_ms: int = 400
+    # Safety cap so a noisy room cannot buffer forever.
+    max_utterance_s: float = 30.0
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.aggressiveness <= 3:
+            raise ValueError(f"vad aggressiveness must be 0-3, got {self.aggressiveness}")
+
+
+@dataclass(frozen=True)
+class SttConfig:
+    model: str = "models/ggml-base.en-q5_1.bin"
+    binary: str = "vendor/whisper.cpp/build/bin/whisper-cli"
+    threads: int = 4
+    # Beam search costs base.en only ~0.06s over greedy on this hardware, so the
+    # accuracy is effectively free. See the benchmark table in the README.
+    beam_size: int = 5
+    language: str = "en"
+
+
+@dataclass(frozen=True)
 class Config:
     audio: AudioConfig
+    vad: VadConfig
+    stt: SttConfig
 
     @classmethod
     def load(cls, path: Path | str = DEFAULT_CONFIG) -> "Config":
         raw = yaml.safe_load(Path(path).read_text()) or {}
-        return cls(audio=AudioConfig(**raw.get("audio", {})))
+        return cls(
+            audio=AudioConfig(**raw.get("audio", {})),
+            vad=VadConfig(**raw.get("vad", {})),
+            stt=SttConfig(**raw.get("stt", {})),
+        )

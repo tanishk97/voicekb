@@ -23,7 +23,7 @@ below it is verified on real hardware.
 | # | Stage | Verify with | Status |
 |---|-------|-------------|--------|
 | 1 | Audio capture | `tests/test_audio.py`, `scripts/check_mic.py` | **working**; 38 dB SNR on speech |
-| 2 | VAD segmentation | (tbd) | not started |
+| 2 | VAD segmentation | `scripts/transcribe_file.py` | **working**; webrtcvad, offline-tunable |
 | 3 | whisper.cpp STT | `scripts/bench_whisper.sh` | **working**; base.en-q5_1 at 0.40x realtime |
 | 4 | Bluetooth HID output | `voicekb/bt_hid.py --serve` | **working**; typed into macOS over an encrypted link |
 | 5 | LLM reformatting + profiles | (tbd) | not started |
@@ -151,9 +151,51 @@ Two details worth remembering:
   beam search.
 - **The 35s small.en greedy figure is misleading.** It was the first run, so it
   paid to read a 182 MB model off the microSD with a cold page cache. The 19.6s
-  beam figure that followed is the warmer, fairer number. Model load time from
-  SD is real and argues for keeping whisper resident rather than re-spawning it
-  per utterance.
+  beam figure that followed is the warmer, fairer number. That cold-cache cost
+  is a one-time hit at first use, not a per-utterance one — see the timing
+  breakdown below, which measures warm model load at 72 ms.
+
+### Where the latency actually goes
+
+whisper's own timing breakdown on a 6-second clip with base.en-q5_1:
+
+```
+load time   =   72 ms
+mel time    =    9 ms
+encode time = 2214 ms  <- 90% of the total, and it runs exactly once
+decode time =   16 ms
+total time  = 2456 ms
+```
+
+Three consequences worth internalizing before tuning anything:
+
+**Utterance length is nearly free.** whisper's encoder always processes a fixed
+30-second mel window, padding shorter audio to fill it. Measured: 0.5 seconds of
+silence costs 2.40s and 6 seconds of speech costs 2.46s. So there is no
+throughput reason to split speech into short segments — `vad.silence_ms` should
+be tuned purely for how the interaction feels.
+
+**whisper-server would not help.** Model load is 72 ms, not seconds. Keeping
+weights resident solves a problem we do not have. (The earlier 35s figure for
+small.en was a cold page cache reading 182 MB off the microSD — real, but a
+one-time cost, not per-utterance.)
+
+**Beam search really is free.** Decode is 16 ms of a 2456 ms total. Beam width
+changes decode, which is noise next to the encoder.
+
+The practical latency floor per utterance is therefore roughly
+`vad.silence_ms` + 2.4s + typing time.
+
+### If that is too slow: tiny.en
+
+| Model | Wall time | vs base |
+|-------|-----------|---------|
+| base.en-q5_1 | 2.45s | — |
+| tiny.en-q5_1 | 1.10s | 2.2x faster |
+
+`tiny.en-q5_1` is downloaded and switchable by editing `stt.model`. The default
+stays base.en because dictation errors cost more time to fix than the extra
+1.3 seconds costs to wait — but the option is one config line away.
 
 ## Hardware notes
 

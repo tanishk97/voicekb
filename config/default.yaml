@@ -54,3 +54,28 @@ audio:
   # noise floor along with your voice, so raise alsa_capture_percent first.
   # 1.0 = off.
   software_gain: 1.0
+
+vad:
+  # webrtcvad aggressiveness, 0-3. Higher rejects more non-speech but starts
+  # clipping quiet syllables.
+  aggressiveness: 2
+  # Speech must persist this long to open an utterance (rejects clicks).
+  start_ms: 150
+  # Silence this long closes it. This is the single biggest contributor to
+  # perceived latency: nothing downstream runs until the utterance closes, so
+  # every millisecond here is added to every dictation. Too short, though, and
+  # normal mid-sentence pauses split one thought into two.
+  silence_ms: 700
+  # Audio retained from before the trigger fired. Without it the first syllable
+  # is reliably lost, because by the time enough speech frames accumulate to
+  # trigger, that syllable has already gone past.
+  pre_roll_ms: 300
+  min_utterance_ms: 400
+  max_utterance_s: 30
+
+stt:
+  model: models/ggml-base.en-q5_1.bin
+  binary: vendor/whisper.cpp/build/bin/whisper-cli
+  threads: 4
+  beam_size: 5
+  language: en

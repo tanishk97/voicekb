@@ -63,6 +63,30 @@ def collapse_whitespace(text: str) -> str:
     return text.strip()
 
 
+def is_non_speech(text: str) -> bool:
+    """True if whisper heard a sound rather than words, and nothing should be typed.
+
+    whisper describes non-speech audio in parentheses, and the vocabulary is
+    open-ended — a breath blast on the mic came back as "(swooshing)", which no
+    keyword list would have anticipated. So rather than trying to enumerate the
+    words, the rule is structural: if the entire utterance is one parenthesized
+    or bracketed phrase, it is a sound description, not speech.
+
+    This deliberately does not touch parentheses used *within* a sentence, so
+    dictating "call foo(bar) now" still works.
+    """
+    stripped = collapse_whitespace(strip_annotations(text))
+    if not stripped:
+        return True
+    # Entire remaining text wrapped in one pair of brackets.
+    return bool(re.fullmatch(r"[(\[][^()\[\]]*[)\]][.!?]?", stripped))
+
+
 def normalize_for_hid(text: str) -> str:
-    """Full pipeline: annotations out, typography folded, whitespace tidied."""
+    """Full pipeline: annotations out, typography folded, whitespace tidied.
+
+    Returns "" for non-speech, so callers can treat empty as "type nothing".
+    """
+    if is_non_speech(text):
+        return ""
     return collapse_whitespace(fold_to_ascii(strip_annotations(text)))

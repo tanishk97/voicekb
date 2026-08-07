@@ -3,3 +3,4 @@
 numpy>=1.26
 sounddevice>=0.4.6
 PyYAML>=6.0
+webrtcvad-wheels>=2.0.14

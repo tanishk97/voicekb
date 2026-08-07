@@ -61,6 +61,26 @@ def test_whitespace() -> None:
     check("newlines survive", collapse_whitespace("a\nb") == "a\nb")
 
 
+def test_non_speech() -> None:
+    """Utterances that are only a sound description must type nothing.
+
+    A breath blast on the mic really did come back as "(swooshing)" during
+    testing, which no keyword list would have predicted -- hence the structural
+    rule rather than a vocabulary.
+    """
+    print("=== non-speech detection ===")
+    from voicekb.text import is_non_speech
+
+    for text in ["(swooshing)", "[BLANK_AUDIO]", "(upbeat music)",
+                 "(clears throat).", "   ", "[door slams]"]:
+        check(f"{text!r} is non-speech", is_non_speech(text))
+        check(f"{text!r} types nothing", normalize_for_hid(text) == "")
+
+    for text in ["Hello, hello, hello", "call foo(bar) now", "It (mostly) works"]:
+        check(f"{text!r} is speech", not is_non_speech(text))
+        check(f"{text!r} still types", normalize_for_hid(text) != "")
+
+
 def test_end_to_end_typeable() -> None:
     print("=== everything out is typeable ===")
     samples = [
@@ -78,7 +98,8 @@ def test_end_to_end_typeable() -> None:
 
 
 def main() -> int:
-    for fn in (test_typography, test_annotations, test_whitespace, test_end_to_end_typeable):
+    for fn in (test_typography, test_annotations, test_whitespace, test_non_speech,
+               test_end_to_end_typeable):
         fn()
     print()
     if failures:
