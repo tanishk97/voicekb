@@ -51,21 +51,27 @@ journalctl -u voicekb -f          # watch it work
 
 Then connect `voicekb` from the Mac's Bluetooth menu.
 
-**In progress, not yet run on hardware:**
+The LLM layer needs its server up first:
 
-- `scripts/setup_llama.sh` — llama.cpp build was **stopped part way** (~13%) to
-  let the Pi cool. Re-run it; the build is incremental so it resumes.
-- `voicekb/llm.py` — profiles (clean/slack/commit/email/raw) written and
-  compiling, but never executed. It expects a resident `llama-server`, which
-  `setup_llama.sh` does not build yet — its `--target` is `llama-cli` only.
-  **Fix that target before running.**
-- The VAD energy gate (`vad.min_level_dbfs`) is written and unit-clean but has
-  not seen live audio.
+```bash
+bash scripts/serve_llm.sh --service    # ~8s to load Qwen2.5-1.5B
+```
 
-**Known issue: thermals.** With no active cooler, compiling llama.cpp while the
-pipeline ran took the SoC to 72 °C, and an earlier small.en run hit 81.8 °C and
-tripped the soft limit. Do not build and run inference at the same time. An
-active cooler is the real fix and would also reopen small.en as an option.
+Without it the pipeline still runs and types the raw transcription, logging a
+warning.
+
+**Not yet run on hardware:**
+
+- The VAD energy gate (`vad.min_level_dbfs`) is unit-clean but has not seen live
+  audio.
+- The full pipeline has not been run end-to-end *with the LLM enabled* — each
+  half is verified separately.
+
+**Known issue: thermals.** With no active cooler, building llama.cpp peaked at
+77 °C (no throttle, 16 min of CPU), and an earlier small.en run hit 81.8 °C and
+tripped the soft limit. Do not build and run inference at the same time —
+`setup_llama.sh` now holds one core back for this reason. An active cooler is
+the real fix and would also reopen small.en as an option.
 
 **Known issue: VAD false triggers.** Room noise opens utterances that whisper
 returns as `(crickets chirping)` or `[BLANK_AUDIO]`. They are discarded
