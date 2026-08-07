@@ -17,6 +17,7 @@ and prepends it. Without that, utterances reliably lose their first word.
 
 from __future__ import annotations
 
+import threading
 from collections import deque
 from enum import Enum
 
@@ -123,5 +124,91 @@ class VadSegmenter:
     def flush(self) -> np.ndarray | None:
         """End any in-progress utterance, e.g. on shutdown."""
         if self.state is State.SPEAKING:
+            return self._finish()
+        return None
+
+
+class PushToTalkSegmenter:
+    """Segment by button state instead of by silence.
+
+    Same interface as VadSegmenter -- push() frames in, get an utterance back --
+    so the pipeline does not care which one it is holding.
+
+    The whole point is that release is a *statement* that you have finished,
+    not an inference from timing. That removes the silence_ms guess, which was
+    never right: 700ms split single sentences at ordinary thinking pauses, and
+    1200ms fixed that by adding 1.2s of latency to every single utterance.
+
+    It also removes VAD false triggers wholesale. Nothing is captured unless you
+    are holding the button, so room noise cannot open an utterance and cost 2.5s
+    of whisper to discover it was "(crickets chirping)".
+    """
+
+    def __init__(
+        self,
+        sample_rate: int,
+        frame_ms: int,
+        pre_roll_ms: int = 200,
+        min_utterance_ms: int = 200,
+        max_utterance_s: float = 120.0,
+    ) -> None:
+        self.sample_rate = sample_rate
+        self.frame_ms = frame_ms
+        # A small pre-roll still helps: people commonly start the first syllable
+        # as they press rather than after. Much shorter than the VAD's, which
+        # had to cover trigger latency as well.
+        self._pre_roll = deque(maxlen=max(1, pre_roll_ms // frame_ms))
+        self._min_frames = max(1, min_utterance_ms // frame_ms)
+        self._max_frames = int(max_utterance_s * 1000 / frame_ms)
+
+        self._held = False
+        self._utterance: list[np.ndarray] = []
+        self._lock = threading.Lock()
+        self.rejected_short = 0
+        self.truncated = 0
+
+    @property
+    def state(self) -> State:
+        return State.SPEAKING if self._held else State.IDLE
+
+    def set_held(self, held: bool) -> None:
+        """Called from the button's callback thread."""
+        with self._lock:
+            self._held = held
+
+    def push(self, frame: np.ndarray) -> np.ndarray | None:
+        with self._lock:
+            held = self._held
+
+        if not held:
+            if self._utterance:
+                return self._finish()
+            # Keep a rolling pre-roll so audio just before the press survives.
+            self._pre_roll.append(frame)
+            return None
+
+        if not self._utterance:
+            # Opening: seed with the pre-roll captured before the press landed.
+            self._utterance = list(self._pre_roll)
+            self._pre_roll.clear()
+        self._utterance.append(frame)
+
+        # Safety cap, in case the button sticks or is taped down.
+        if len(self._utterance) >= self._max_frames:
+            self.truncated += 1
+            return self._finish()
+        return None
+
+    def _finish(self) -> np.ndarray | None:
+        frames, self._utterance = self._utterance, []
+        self._pre_roll.clear()
+        if len(frames) < self._min_frames:
+            self.rejected_short += 1
+            return None  # an accidental tap, not speech
+        return np.concatenate(frames)
+
+    def flush(self) -> np.ndarray | None:
+        """End any in-progress utterance, e.g. on shutdown."""
+        if self._utterance:
             return self._finish()
         return None

@@ -8,7 +8,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import numpy as np  # noqa: E402
+
 from voicekb.buttons import PHYSICAL_PIN, ProfileButton, next_in_cycle  # noqa: E402
+from voicekb.vad import PushToTalkSegmenter  # noqa: E402
 
 failures: list[str] = []
 
@@ -59,8 +62,55 @@ def test_pin_map() -> None:
     check("GPIO27 is physical 13", PHYSICAL_PIN[27] == 13)
 
 
+def test_push_to_talk() -> None:
+    """Release ends the utterance, full stop -- no timing inference."""
+    print("=== push-to-talk segmentation ===")
+    sr, fms = 16000, 30
+    seg = PushToTalkSegmenter(sr, fms, pre_roll_ms=200, min_utterance_ms=200)
+    frame = lambda v: np.full(480, v, np.int16)  # noqa: E731
+
+    got = [seg.push(frame(1)) for _ in range(10)]
+    check("nothing captured while released", all(g is None for g in got))
+
+    seg.set_held(True)
+    got = [seg.push(frame(2)) for _ in range(30)]
+    check("nothing emitted while still held", all(g is None for g in got))
+
+    seg.set_held(False)
+    out = seg.push(frame(1))
+    check("release emits the utterance", out is not None)
+    if out is not None:
+        check("pre-roll is included", int((out == 1).sum()) > 0)
+        check("held audio is included", int((out == 2).sum()) == 30 * 480)
+
+    print("  -- silence during a hold must NOT end it --")
+    seg2 = PushToTalkSegmenter(sr, fms, pre_roll_ms=0, min_utterance_ms=200)
+    seg2.set_held(True)
+    mid = [seg2.push(frame(0)) for _ in range(200)]  # 6s of pure silence
+    check("6s of silence mid-hold emits nothing", all(g is None for g in mid))
+    seg2.set_held(False)
+    check("still emits on release", seg2.push(frame(0)) is not None)
+
+    print("  -- guards --")
+    seg3 = PushToTalkSegmenter(sr, fms, pre_roll_ms=0, min_utterance_ms=200)
+    seg3.set_held(True); seg3.push(frame(3)); seg3.set_held(False)
+    check("an accidental tap is discarded", seg3.push(frame(0)) is None)
+    check("  and counted", seg3.rejected_short == 1)
+
+    # A stuck button chunks rather than buffering without bound: each time the
+    # cap is hit the audio is emitted and a fresh segment starts. 40 frames
+    # against a 10-frame cap therefore yields 4 chunks, not 1.
+    seg4 = PushToTalkSegmenter(sr, fms, pre_roll_ms=0, min_utterance_ms=30,
+                               max_utterance_s=0.3)
+    seg4.set_held(True)
+    outs = [o for o in (seg4.push(frame(4)) for _ in range(40)) if o is not None]
+    check("a stuck button is capped, not unbounded", len(outs) == 4, f"{len(outs)} chunks")
+    check("  each chunk is bounded", all(o.size == 10 * 480 for o in outs))
+    check("  truncations counted", seg4.truncated == 4, f"{seg4.truncated}")
+
+
 def main() -> int:
-    for fn in (test_cycle, test_button_without_gpio, test_pin_map):
+    for fn in (test_cycle, test_button_without_gpio, test_pin_map, test_push_to_talk):
         fn()
     print()
     if failures:

@@ -1,18 +1,22 @@
-"""GPIO button input: switch profiles without speaking or SSHing in.
+"""GPIO button input.
 
-Wiring is one tactile switch between a GPIO pin and ground, with the internal
-pull-up enabled. No resistor, no other components.
+The primary mode is **push-to-talk**: hold the button to capture, release to
+transcribe. This is strictly better than waiting for silence, because the
+release is a *statement* that you have finished rather than an inference from
+timing. It removes, in one move:
 
-The default cycle is deliberately SHORT. There is no display on this device, so
-after a press you cannot see which profile you landed on -- and blindly stepping
-through five modes is worse than useless. The original design called for
-AI-cleaned as the default with raw as "the toggle-to fallback", which is exactly
-a two-position switch, so that is what the default cycle is. Lengthen
-`buttons.cycle` in config if you add an indicator LED.
+  - `vad.silence_ms`, which is pure guesswork about when a pause means "done".
+    At 700ms it split single sentences at thinking pauses; at 1200ms it adds
+    1.2s of latency to every utterance whether you needed it or not.
+  - VAD false triggers on room noise, which cost ~2.5s of whisper each and
+    produced transcriptions like "(crickets chirping)".
+  - The pre-roll guesswork that exists to recover a first syllable lost to
+    trigger latency.
 
-gpiozero is imported lazily so this module can be imported, and the rest of the
-pipeline can run, on a machine with no GPIO at all -- including the Mac, where
-the tests run.
+`profile_cycle` mode is kept for a second button, but push-to-talk is the point.
+
+gpiozero is imported lazily so this module imports fine on a machine with no
+GPIO at all, including the Mac where the tests run.
 """
 
 from __future__ import annotations
@@ -20,18 +24,17 @@ from __future__ import annotations
 import threading
 from typing import Callable
 
-# BCM number -> physical header pin, for error messages that are actually
-# actionable when someone has miscounted the header.
+# BCM number -> physical header pin, so error messages are actionable when
+# someone has miscounted the header.
 PHYSICAL_PIN = {17: 11, 27: 13, 22: 15, 23: 16, 24: 18, 25: 22, 5: 29, 6: 31}
 
 
 def next_in_cycle(current: str, cycle: list[str]) -> str:
     """The profile after `current`, wrapping around.
 
-    A `current` value outside the cycle -- which happens when a spoken command
-    selects a profile the button does not cycle through -- returns the first
-    entry, so a press always lands somewhere predictable rather than doing
-    nothing.
+    A `current` outside the cycle -- which happens when a spoken command selects
+    a profile the button does not cycle through -- returns the first entry, so a
+    press always lands somewhere predictable rather than doing nothing.
     """
     if not cycle:
         return current
@@ -39,6 +42,58 @@ def next_in_cycle(current: str, cycle: list[str]) -> str:
         return cycle[(cycle.index(current) + 1) % len(cycle)]
     except ValueError:
         return cycle[0]
+
+
+class GpioButton:
+    """A tactile switch with press and release callbacks.
+
+    Both edges matter for push-to-talk, unlike profile cycling which only cares
+    about the press.
+    """
+
+    def __init__(
+        self,
+        pin: int,
+        on_press: Callable[[], None] | None = None,
+        on_release: Callable[[], None] | None = None,
+        bounce_ms: float = 50.0,
+    ) -> None:
+        self.pin = pin
+        self.on_press = on_press
+        self.on_release = on_release
+        self.bounce_ms = bounce_ms
+        self._button = None
+
+    def start(self) -> None:
+        """Claim the GPIO pin. Raises if unavailable; the caller decides severity."""
+        from gpiozero import Button
+
+        # hold_time/hold_repeat are not used: we want raw press and release
+        # edges, and debounce is what keeps contact chatter from producing
+        # phantom release-then-press pairs mid-hold.
+        self._button = Button(
+            self.pin, pull_up=True, bounce_time=self.bounce_ms / 1000.0
+        )
+        if self.on_press is not None:
+            self._button.when_pressed = self.on_press
+        if self.on_release is not None:
+            self._button.when_released = self.on_release
+
+    @property
+    def is_pressed(self) -> bool:
+        return bool(self._button is not None and self._button.is_pressed)
+
+    def close(self) -> None:
+        if self._button is not None:
+            try:
+                self._button.close()
+            except Exception:  # noqa: BLE001
+                pass
+            self._button = None
+
+    def where(self) -> str:
+        phys = PHYSICAL_PIN.get(self.pin)
+        return f"GPIO{self.pin}" + (f" (physical pin {phys})" if phys else "")
 
 
 class ProfileButton:
@@ -55,28 +110,19 @@ class ProfileButton:
         self.cycle = list(cycle)
         self.on_change = on_change
         self.bounce_ms = bounce_ms
-        self._button = None
         self._lock = threading.Lock()
         self._current: str | None = None
+        self._gpio = GpioButton(pin, on_press=self._pressed, bounce_ms=bounce_ms)
 
     def start(self, current_profile: str) -> None:
-        """Claim the GPIO pin. Raises if unavailable; callers decide if fatal."""
-        from gpiozero import Button
-
         self._current = current_profile
-        # bounce_time is what stops one physical press registering as several;
-        # tactile switches chatter for a few milliseconds on contact.
-        self._button = Button(
-            self.pin, pull_up=True, bounce_time=self.bounce_ms / 1000.0
-        )
-        self._button.when_pressed = self._pressed
+        self._gpio.start()
 
     def sync(self, profile: str) -> None:
-        """Tell the button the profile changed by some other route.
+        """Record a profile change made by some other route (a spoken command).
 
-        Without this, a spoken "commit mode" would leave the button's idea of
-        the current profile stale, and the next press would jump somewhere
-        surprising.
+        Without this the button's idea of the current profile goes stale and the
+        next press jumps somewhere surprising.
         """
         with self._lock:
             self._current = profile
@@ -90,14 +136,7 @@ class ProfileButton:
             self.on_change(old, new)
 
     def close(self) -> None:
-        if self._button is not None:
-            try:
-                self._button.close()
-            except Exception:  # noqa: BLE001
-                pass
-            self._button = None
+        self._gpio.close()
 
     def describe(self) -> str:
-        phys = PHYSICAL_PIN.get(self.pin)
-        where = f"GPIO{self.pin}" + (f" (physical pin {phys})" if phys else "")
-        return f"{where}, cycle: {' -> '.join(self.cycle)}"
+        return f"{self._gpio.where()}, cycle: {' -> '.join(self.cycle)}"

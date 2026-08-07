@@ -106,15 +106,30 @@ class LlmConfig:
 @dataclass(frozen=True)
 class ButtonsConfig:
     enabled: bool = True
+    # "push_to_talk": hold to capture, release to transcribe. Release is a
+    #   statement that you have finished, which removes the silence_ms guess
+    #   entirely -- no mid-sentence splits, no room-noise false triggers, and no
+    #   waiting out a silence window before anything happens.
+    # "profile_cycle": each press advances through `cycle`.
+    mode: str = "push_to_talk"
     # BCM numbering. GPIO17 is physical pin 11, next to a ground on pin 9.
-    profile_pin: int = 17
+    pin: int = 17
     bounce_ms: float = 50.0
-    # Deliberately two entries. There is no display, so after a press you cannot
-    # see where you landed; blindly stepping through five modes is worse than a
-    # toggle. The original design called for AI-cleaned as default with raw as
-    # "the toggle-to fallback" -- that is a two-position switch. Lengthen this
-    # only if you add an indicator LED.
+    # Audio kept from just before the press: people often start the first
+    # syllable as they press rather than after.
+    pre_roll_ms: int = 200
+    # Shorter than this is an accidental tap, not speech.
+    min_utterance_ms: int = 200
+    # Safety cap in case the button sticks or is held down by accident.
+    max_hold_s: float = 120.0
+    # Only used in profile_cycle mode.
     cycle: tuple[str, ...] = ("clean", "raw")
+
+    def __post_init__(self) -> None:
+        if self.mode not in ("push_to_talk", "profile_cycle"):
+            raise ValueError(
+                f"buttons.mode must be push_to_talk or profile_cycle, got {self.mode!r}"
+            )
 
 
 @dataclass(frozen=True)

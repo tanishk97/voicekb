@@ -120,12 +120,31 @@ llm:
 
 buttons:
   enabled: true
+
+  # push_to_talk: hold the button to capture, release to transcribe.
+  #
+  # This is the point of the button. Release is a *statement* that you have
+  # finished speaking, so the whole silence-timing guess disappears: no
+  # mid-sentence splits when you pause to think, no room noise opening
+  # utterances that cost 2.5s of whisper to discover were "(crickets
+  # chirping)", and no waiting out a silence window before anything happens.
+  #
+  # profile_cycle: each press steps through `cycle` instead.
+  mode: push_to_talk
+
   # BCM numbering. GPIO17 is physical pin 11, with a ground on physical pin 9.
   # Wire one tactile-switch leg to each; use DIAGONALLY opposite legs, since the
   # two legs on each side of a 4-pin switch are bridged internally.
-  profile_pin: 17
+  pin: 17
   bounce_ms: 50
-  # Two entries on purpose. There is no display, so after a press you cannot see
-  # which profile you landed on, and blindly cycling five modes is worse than a
-  # toggle. Lengthen only if you add an indicator LED.
+
+  # Audio kept from just before the press. People commonly start the first
+  # syllable as they press rather than after.
+  pre_roll_ms: 200
+  # Shorter than this is an accidental tap, not speech.
+  min_utterance_ms: 200
+  # Safety cap in case the button sticks.
+  max_hold_s: 120
+
+  # Only used when mode is profile_cycle.
   cycle: [clean, raw]

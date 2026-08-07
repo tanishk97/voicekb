@@ -28,7 +28,7 @@ below it is verified on real hardware.
 | 4 | Bluetooth HID output | `voicekb/bt_hid.py --serve` | **working**; typed into macOS over an encrypted link |
 | 5 | LLM reformatting + profiles | `scripts/bench_llm.py` | **working**; Qwen2.5-1.5B, 0.7-2.1s |
 | — | **End-to-end speak-to-type** | `scripts/run_voicekb.py` | **working** |
-| 6 | GPIO button | `scripts/test_button.py` | **working**; toggles profile |
+| 6 | GPIO button | `scripts/test_button.py` | **working**; push-to-talk |
 
 Full design writeup in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), build guide in [docs/REPLICATION.md](docs/REPLICATION.md), dev workflow in [docs/WORKFLOW.md](docs/WORKFLOW.md).
 
@@ -466,20 +466,34 @@ one side to the other. Two legs from the same side read as *permanently
 pressed*, which looks exactly like a software bug. `test_button.py` reads the
 resting state first and says so explicitly if it sees this.
 
-### Why the cycle is only two entries
+### Push-to-talk replaces the timing guess
 
-`buttons.cycle` defaults to `[clean, raw]`. There is no display, so after a press
-you cannot see which profile you landed on — blindly stepping through five modes
-is worse than a toggle. This also matches the original design, which called for
-AI-cleaned as the default with raw as "the toggle-to fallback": a two-position
-switch. Lengthen the cycle only if you add an indicator LED.
+`buttons.mode: push_to_talk` — hold to capture, release to transcribe. The
+release is a *statement* that you have finished, not an inference, and that
+deletes a whole class of problem:
 
-Spoken commands (`"commit mode"`) still reach every profile, and the button is
-kept in sync when they do — otherwise the next press would jump from a stale
-position.
+- **No `silence_ms` tradeoff.** At 700ms the VAD split single sentences at
+  ordinary thinking pauses; 1200ms fixed that by adding 1.2s of latency to
+  every utterance whether it was needed or not. Neither is right, because the
+  question ("has he finished?") is unanswerable from timing alone.
+- **No false triggers.** Nothing is captured unless the button is held, so room
+  noise cannot open an utterance that costs ~2.5s of whisper to discover was
+  `(crickets chirping)`.
+- **Silence inside a hold is just silence.** Pause mid-sentence for as long as
+  you like; the utterance stays open.
 
-The button is a convenience, not a dependency: if the pin is missing or already
-claimed, the daemon logs it and carries on. The microphone is the product.
+A short 200ms pre-roll is still kept, because people commonly begin the first
+syllable *as* they press rather than after.
+
+Two guards: a hold shorter than `min_utterance_ms` is treated as an accidental
+tap and discarded, and a hold exceeding `max_hold_s` is chunked rather than
+buffered without bound, in case the button sticks.
+
+If the pin cannot be claimed the daemon **falls back to voice detection** and
+says so, rather than refusing to run. The button is an input method; the
+microphone is the product.
+
+`profile_cycle` mode is still available for a second button.
 
 ## Hardware notes
 

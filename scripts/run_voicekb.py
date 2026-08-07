@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from voicekb.audio import open_source  # noqa: E402
 from voicekb.bt_hid import BluetoothHIDKeyboard  # noqa: E402
-from voicekb.buttons import ProfileButton  # noqa: E402
+from voicekb.buttons import GpioButton, ProfileButton  # noqa: E402
 from voicekb.commands import KeyCommand, ProfileCommand  # noqa: E402
 from voicekb.commands import describe as describe_command  # noqa: E402
 from voicekb.commands import parse as parse_command  # noqa: E402
@@ -40,7 +40,7 @@ from voicekb.text import (  # noqa: E402
     normalize_for_hid,
     strip_fillers,
 )
-from voicekb.vad import VadSegmenter  # noqa: E402
+from voicekb.vad import PushToTalkSegmenter, VadSegmenter  # noqa: E402
 
 _stop = threading.Event()
 # Set by the worker when a write to the HID channel fails, so the capture loop
@@ -234,16 +234,47 @@ def main() -> int:
     _log(f"profile: {profile}" + ("" if _uses else "  (no model in this profile)"))
     _log("say e.g. 'slack mode' or 'press enter' to command it")
 
-    # GPIO button. A missing or already-claimed pin must not stop dictation --
-    # the button is a convenience, the microphone is the product.
+    # GPIO button. A missing or already-claimed pin must never stop dictation --
+    # the button is an input method, the microphone is the product. If
+    # push-to-talk cannot claim the pin we fall back to voice activity
+    # detection, so the device still works, just with the timing guess back.
     button: ProfileButton | None = None
-    if cfg.buttons.enabled:
+    ptt: PushToTalkSegmenter | None = None
+    ptt_gpio: GpioButton | None = None
+
+    if cfg.buttons.enabled and cfg.buttons.mode == "push_to_talk":
+        ptt = PushToTalkSegmenter(
+            sample_rate=sr,
+            frame_ms=cfg.audio.frame_ms,
+            pre_roll_ms=cfg.buttons.pre_roll_ms,
+            min_utterance_ms=cfg.buttons.min_utterance_ms,
+            max_utterance_s=cfg.buttons.max_hold_s,
+        )
+
+        def _held() -> None:
+            ptt.set_held(True)
+            _log("  [hold] listening ...")
+
+        def _released() -> None:
+            ptt.set_held(False)
+            _log("  [release] transcribing")
+
+        ptt_gpio = GpioButton(cfg.buttons.pin, on_press=_held, on_release=_released,
+                              bounce_ms=cfg.buttons.bounce_ms)
+        try:
+            ptt_gpio.start()
+            _log(f"push-to-talk on {ptt_gpio.where()} -- hold to speak, release when done")
+        except Exception as exc:  # noqa: BLE001
+            _log(f"push-to-talk unavailable ({exc}); falling back to voice detection")
+            ptt, ptt_gpio = None, None
+
+    elif cfg.buttons.enabled and cfg.buttons.mode == "profile_cycle":
         def _on_button(old: str, new: str) -> None:
             profile_ref[0] = new
             _log(f"button: profile {old} -> {new}")
 
         button = ProfileButton(
-            pin=cfg.buttons.profile_pin,
+            pin=cfg.buttons.pin,
             cycle=list(cfg.buttons.cycle),
             on_change=_on_button,
             bounce_ms=cfg.buttons.bounce_ms,
@@ -280,9 +311,15 @@ def main() -> int:
     signal.signal(signal.SIGINT, handle_signal)
     signal.signal(signal.SIGTERM, handle_signal)
 
-    seg = VadSegmenter(cfg.vad, sr, cfg.audio.frame_ms)
-    _log(f"listening. speak into the mic. (vad aggressiveness={cfg.vad.aggressiveness}, "
-         f"silence={cfg.vad.silence_ms}ms)")
+    def _new_segmenter():
+        return ptt if ptt is not None else VadSegmenter(cfg.vad, sr, cfg.audio.frame_ms)
+
+    seg = _new_segmenter()
+    if ptt is not None:
+        _log("ready. hold the button, speak, release.")
+    else:
+        _log(f"listening continuously. (vad aggressiveness={cfg.vad.aggressiveness}, "
+             f"silence={cfg.vad.silence_ms}ms)")
     _log("Ctrl-C to stop.")
 
     utterances = 0
@@ -308,7 +345,7 @@ def main() -> int:
                 # exiting, so sleeping the Mac or wandering out of range does not
                 # require restarting the service.
                 _disconnected.clear()
-                seg = VadSegmenter(cfg.vad, sr, cfg.audio.frame_ms)
+                seg = _new_segmenter()
                 # Try dialling the host back before falling back to waiting.
                 # macOS keeps the baseband ACL link open and believes it is still
                 # connected, so it never reopens the L2CAP channels -- leaving us
@@ -329,6 +366,8 @@ def main() -> int:
         kb.close()
         if button is not None:
             button.close()
+        if ptt_gpio is not None:
+            ptt_gpio.close()
         _log(f"stopped after {utterances} utterance(s)")
     return 0
 
