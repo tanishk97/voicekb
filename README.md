@@ -319,6 +319,40 @@ Note this is a **reliability** property more than a security one: the only perso
 speaking into the mic is you. The realistic failure is dictating an
 instruction-shaped sentence and getting a haiku typed into Slack.
 
+### `clean` does not use the model, and that was a deliberate reversal
+
+The brief called for AI-cleaned output as the default. It is now **deterministic**
+filler removal instead (`text.strip_fillers`), because the model could not be
+trusted with the job.
+
+Asked to clean *"The build is red and I will look at it after lunch"*,
+Qwen2.5-1.5B returned *"I will look at the build after lunch"* — dropping the
+only fact in the sentence. That is not a prompting problem that more wording
+fixes; tuning the prompt moved the failure to different sentences rather than
+removing it. And the content-overlap guard cannot catch it: a drop that size
+scores **0.75**, far above any floor that legitimate rewrites could clear.
+
+Filler removal is a bounded, well-specified problem — a fixed list of hesitation
+sounds and trailing tags. A regex does it in microseconds, cannot hallucinate,
+and cannot delete a word that is not on the list. It is deliberately
+conservative: `like`, `right`, `actually` and `basically` are **left alone**,
+since they have legitimate uses and leaving filler in is a far smaller failure
+than deleting meaning.
+
+Side effects: `clean` latency went from 1.5–6.7s to nothing, and it became
+deterministic — same input, same output, every time.
+
+The model keeps the profiles where transformation is the actual point: `slack`,
+`commit`, `email`. `raw` still means the exact transcription, fillers included.
+
+### Tuning found by using it
+
+`vad.silence_ms` started at 700ms and split single sentences in two — dictating
+one thought produced *"...One is I think it is of"* and then *"processor and
+second..."*, because an ordinary thinking pause exceeded the window. **1200ms**
+is the working value. This is the main latency/usability dial: it is added to
+every utterance, but too short fragments your sentences.
+
 ### Known limitation: the vocabulary hint does not work
 
 `llm.vocabulary` is meant to restore terms whisper mangles, seeded with
