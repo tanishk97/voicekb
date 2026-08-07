@@ -19,3 +19,9 @@ config/local.yaml
 
 # whisper.cpp / llama.cpp checkouts — rebuilt on the Pi by scripts, not vendored.
 vendor/
+
+# Local Claude Code settings (machine-specific hooks).
+.claude/settings.local.json
+
+# Local assistant notes: contains host/user details, stays off GitHub.
+CLAUDE.md
