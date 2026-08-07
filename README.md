@@ -36,12 +36,12 @@ debugging both at once.
 
 ## Stage 0: provisioning the Pi
 
-Flashed with Raspberry Pi Imager, using its customization dialog so the Pi joins
+Flashed with Raspberry Pi Imager v2.0.10, which provisions via cloud-init (user-data/network-config on the FAT boot partition), so the Pi joins
 Wi-Fi and accepts SSH on first boot with no monitor attached.
 
 | Setting | Value |
 |---------|-------|
-| OS | Raspberry Pi OS Lite (64-bit), Bookworm |
+| OS | Raspberry Pi OS Lite (64-bit), Debian 13 Trixie |
 | Hostname | `voicekb` (reachable as `voicekb.local`) |
 | User | `tanishk` |
 | SSH | public-key only, `~/.ssh/id_ed25519_pi` |
