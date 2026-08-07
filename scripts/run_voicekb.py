@@ -29,7 +29,8 @@ from voicekb.audio import open_source  # noqa: E402
 from voicekb.bt_hid import BluetoothHIDKeyboard  # noqa: E402
 from voicekb.config import DEFAULT_CONFIG, Config  # noqa: E402
 from voicekb.stt import WhisperSTT  # noqa: E402
-from voicekb.text import normalize_for_hid  # noqa: E402
+from voicekb.llm import LlamaReformatter  # noqa: E402
+from voicekb.text import is_non_speech, normalize_for_hid  # noqa: E402
 from voicekb.vad import VadSegmenter  # noqa: E402
 
 _stop = threading.Event()
@@ -49,6 +50,8 @@ def transcribe_worker(
     sample_rate: int,
     trailing_space: bool,
     dry_run: bool,
+    llm: LlamaReformatter | None,
+    profile: str,
 ) -> None:
     while not _stop.is_set():
         item = work.get()
@@ -62,10 +65,30 @@ def transcribe_worker(
             _log(f"  transcription failed: {exc}")
             continue
 
-        text = normalize_for_hid(result.text)
-        if not text:
-            # Either silence or a sound description like "(swooshing)".
+        # Non-speech is decided on whisper's raw output, before the LLM sees it.
+        # Handing "(crickets chirping)" to a reformatter just invites it to
+        # invent a sentence about crickets.
+        if is_non_speech(result.text):
             _log(f"  {secs:.1f}s -> non-speech, ignored (raw: {result.text!r})")
+            continue
+
+        text = result.text
+        if llm is not None:
+            try:
+                shaped = llm.reformat(text, profile)
+                if shaped.changed:
+                    _log(f"  llm[{profile}] {shaped.elapsed_seconds:.1f}s: "
+                         f"{text!r} -> {shaped.text!r}")
+                text = shaped.text
+            except Exception as exc:  # noqa: BLE001
+                # Type the raw transcription rather than losing the utterance.
+                _log(f"  llm failed, using raw transcription: {exc}")
+
+        # Normalize AFTER the LLM, not before: models emit curly quotes and em
+        # dashes enthusiastically, and those have no HID keycodes.
+        text = normalize_for_hid(text)
+        if not text:
+            _log(f"  {secs:.1f}s -> nothing left to type after normalization")
             continue
 
         _log(f"  {secs:.1f}s -> {result.elapsed_seconds:.1f}s -> {text!r}")
@@ -91,6 +114,11 @@ def main() -> int:
                     help="transcribe and log but never type; no Bluetooth needed")
     ap.add_argument("--no-trailing-space", action="store_true")
     ap.add_argument("--delay-ms", type=float, default=15.0)
+    ap.add_argument("--profile", default=None,
+                    help="clean | slack | commit | email | raw "
+                         "(overrides llm.profile in config)")
+    ap.add_argument("--no-llm", action="store_true",
+                    help="type the raw transcription, bypassing the LLM")
     args = ap.parse_args()
 
     cfg = Config.load(args.config)
@@ -117,6 +145,29 @@ def main() -> int:
         return 1
     _log("  mic OK")
 
+    # Reformatting layer. AI-cleaned is the default mode per the design; "raw"
+    # is the deliberate fallback rather than the starting point.
+    profile = args.profile or cfg.llm.profile
+    llm: LlamaReformatter | None = None
+    if cfg.llm.enabled and not args.no_llm and profile != "raw":
+        llm = LlamaReformatter(
+            base_url=cfg.llm.base_url,
+            timeout_s=cfg.llm.timeout_s,
+            vocabulary=list(cfg.llm.vocabulary),
+        )
+        if not llm.available():
+            if not cfg.llm.fallback_to_raw:
+                _log(f"FATAL: no llama-server at {cfg.llm.base_url}")
+                _log("  start it with: bash scripts/serve_llm.sh --service")
+                return 1
+            # Degrade to raw rather than refusing to run. A dictation device
+            # that types nothing is worse than one that types unpolished text.
+            _log(f"WARNING: no llama-server at {cfg.llm.base_url}; "
+                 "typing raw transcription")
+            _log("  start it with: bash scripts/serve_llm.sh --service")
+            llm = None
+    _log(f"profile: {profile}" + ("" if llm is not None else "  (LLM bypassed)"))
+
     kb = BluetoothHIDKeyboard(key_delay_s=args.delay_ms / 1000.0)
     if not args.dry_run:
         _log("registering HID profile ...")
@@ -130,7 +181,8 @@ def main() -> int:
     work: queue.Queue = queue.Queue(maxsize=8)
     worker = threading.Thread(
         target=transcribe_worker,
-        args=(work, stt, kb, sr, not args.no_trailing_space, args.dry_run),
+        args=(work, stt, kb, sr, not args.no_trailing_space, args.dry_run,
+              llm, profile),
         daemon=True,
     )
     worker.start()
