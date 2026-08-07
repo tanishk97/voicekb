@@ -65,6 +65,24 @@ warning.
 Confirmed working end-to-end in real use: an 18.5-second spoken sentence was
 captured whole, transcribed in 3.7s, and typed into macOS verbatim.
 
+**Verified on two hosts.** The same Pi has typed into macOS and into iOS with
+no code changes — nothing in the HID layer is platform-specific. It advertises
+Class of Device `0x002540` (Peripheral/Keyboard) and SDP UUID `0x1124`, the
+standard identity every platform looks for, using the boot-protocol keyboard
+descriptor.
+
+Two constraints when moving between hosts:
+
+- **One host at a time.** The daemon holds a single connection; disconnect the
+  current host before pairing another. There is no multi-device switching.
+- **The pairing agent must be running** (`bt-agent -c NoInputNoOutput`), or the
+  host falls back to the standard keyboard flow: display a passkey and expect
+  it typed *on the keyboard being paired*. That is unwinnable here, because
+  typing needs the HID channels that do not open until pairing completes. Both
+  macOS and iOS hit this when the agent was down.
+- **US keyboard layout is assumed.** Letters are fine on any layout; symbols
+  will mismap on a host set to UK, German, etc.
+
 **Not yet exercised in real use:**
 
 - The `slack`, `commit` and `email` profiles — verified via `bench_llm.py` on

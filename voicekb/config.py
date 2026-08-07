@@ -78,7 +78,11 @@ class SttConfig:
     # Known mis-transcriptions, applied verbatim after whisper. whisper cannot
     # emit a word outside its vocabulary, so invented terms come back mangled
     # the same way every time -- which is exactly what a lookup table handles.
-    substitutions: tuple[tuple[str, str], ...] = (("voice he be", "voicekb"),)
+    substitutions: tuple[tuple[str, str], ...] = (
+        ("voice he be", "voicekb"),
+        ("voice kb", "voicekb"),
+        ("voice cabey", "voicekb"),
+    )
 
 
 @dataclass(frozen=True)

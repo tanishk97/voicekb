@@ -94,6 +94,8 @@ stt:
   # word you actually said.
   substitutions:
     "voice he be": voicekb
+    "voice kb": voicekb
+    "voice cabey": voicekb
 
 llm:
   # AI-cleaned is the DEFAULT mode; "raw" is the toggle-to fallback.
