@@ -61,6 +61,59 @@ def apply_gain(frame: np.ndarray, gain: float) -> np.ndarray:
     return np.clip(scaled, -INT16_FULL_SCALE, INT16_FULL_SCALE - 1).astype(np.int16)
 
 
+class HighPassFilter:
+    """Second-order Butterworth high-pass, streaming (state persists across frames).
+
+    Speech carries almost nothing below ~80 Hz, but a close-mic'd cheap capsule
+    carries plenty: plosive thump from P/B/T, the bass lift of the proximity
+    effect, desk rumble, and DC offset. Removing it helps twice over — whisper
+    stops seeing energy that encodes no phonemes, and the VAD stops triggering on
+    breath blasts that carry no speech.
+
+    Coefficients are the RBJ cookbook high-pass with Q=1/sqrt(2), which is the
+    maximally-flat (Butterworth) response.
+    """
+
+    def __init__(self, cutoff_hz: float, sample_rate: int) -> None:
+        self.enabled = cutoff_hz > 0
+        if not self.enabled:
+            return
+        if not 0 < cutoff_hz < sample_rate / 2:
+            raise ValueError(
+                f"highpass_hz must be between 0 and Nyquist ({sample_rate // 2}); got {cutoff_hz}"
+            )
+        w0 = 2.0 * math.pi * cutoff_hz / sample_rate
+        cos_w0, sin_w0 = math.cos(w0), math.sin(w0)
+        alpha = sin_w0 / (2.0 * (2.0 ** -0.5))  # Q = 1/sqrt(2)
+
+        a0 = 1.0 + alpha
+        self.b0 = ((1.0 + cos_w0) / 2.0) / a0
+        self.b1 = (-(1.0 + cos_w0)) / a0
+        self.b2 = self.b0
+        self.a1 = (-2.0 * cos_w0) / a0
+        self.a2 = (1.0 - alpha) / a0
+
+        # Direct Form I history, carried between frames so there is no
+        # discontinuity at frame boundaries.
+        self._x1 = self._x2 = self._y1 = self._y2 = 0.0
+
+    def process(self, frame: np.ndarray) -> np.ndarray:
+        if not self.enabled or frame.size == 0:
+            return frame
+        x = frame.astype(np.float64)
+        y = np.empty_like(x)
+        x1, x2, y1, y2 = self._x1, self._x2, self._y1, self._y2
+        b0, b1, b2, a1, a2 = self.b0, self.b1, self.b2, self.a1, self.a2
+        for i in range(x.size):
+            xi = x[i]
+            yi = b0 * xi + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+            x2, x1 = x1, xi
+            y2, y1 = y1, yi
+            y[i] = yi
+        self._x1, self._x2, self._y1, self._y2 = x1, x2, y1, y2
+        return np.clip(y, -INT16_FULL_SCALE, INT16_FULL_SCALE - 1).astype(np.int16)
+
+
 class AudioSource(ABC):
     """A source of 16 kHz mono int16 frames of `cfg.frame_samples` length."""
 
@@ -111,6 +164,7 @@ class SoundDeviceSource(AudioSource):
         self._stream = None
         self.overflow_count = 0
         self.dropped_frames = 0
+        self._hpf = HighPassFilter(cfg.highpass_hz, cfg.sample_rate)
 
     def _callback(self, indata, frames, time_info, status) -> None:  # noqa: ANN001
         if status:
@@ -144,7 +198,10 @@ class SoundDeviceSource(AudioSource):
         cfg = self.cfg
         while True:
             block = self._queue.get()
-            yield apply_gain(to_mono(block, cfg.channel_select), cfg.software_gain)
+            mono = to_mono(block, cfg.channel_select)
+            # High-pass before gain: removing rumble first means gain is not
+            # spending headroom amplifying energy we are about to discard.
+            yield apply_gain(self._hpf.process(mono), cfg.software_gain)
 
 
 def open_source(cfg: AudioConfig) -> AudioSource:

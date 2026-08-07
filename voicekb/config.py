@@ -18,8 +18,9 @@ class AudioConfig:
     frame_ms: int = 30
     channels: int = 1
     channel_select: int | None = None
-    alsa_capture_percent: int = 80
+    alsa_capture_percent: int = 62
     software_gain: float = 1.0
+    highpass_hz: float = 80.0  # 0 disables
 
     @property
     def frame_samples(self) -> int:

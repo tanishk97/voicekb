@@ -19,7 +19,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from voicekb.audio import apply_gain, dbfs, peak_dbfs, to_mono  # noqa: E402
+from voicekb.audio import HighPassFilter, apply_gain, dbfs, peak_dbfs, to_mono  # noqa: E402
 from voicekb.config import AudioConfig, Config  # noqa: E402
 
 failures: list[str] = []
@@ -87,8 +87,61 @@ def test_gain() -> None:
     check("clips negative overflow", apply_gain(np.full(10, -30000, np.int16), 4.0)[0] == -32768)
 
 
+def _tone(freq: float, secs: float = 0.5, sr: int = 16000, amp: int = 10000) -> np.ndarray:
+    t = np.arange(int(sr * secs)) / sr
+    return (np.sin(2 * np.pi * freq * t) * amp).astype(np.int16)
+
+
+def test_highpass() -> None:
+    print("=== high-pass filter ===")
+    sr = 16000
+
+    def response_db(freq: float) -> float:
+        hpf = HighPassFilter(80.0, sr)
+        sig = _tone(freq, 0.5, sr)
+        out = hpf.process(sig)
+        # Skip the settling transient at the start.
+        return dbfs(out[sr // 10:]) - dbfs(sig[sr // 10:])
+
+    at_1k = response_db(1000.0)
+    at_300 = response_db(300.0)
+    at_40 = response_db(40.0)
+    check("1 kHz passes ~untouched", abs(at_1k) < 0.5, f"{at_1k:+.2f} dB")
+    check("300 Hz mostly passes", at_300 > -2.0, f"{at_300:+.2f} dB")
+    # Second-order rolloff is 12 dB/octave; 40 Hz is one octave below the 80 Hz
+    # corner, so expect roughly -12 dB or better.
+    check("40 Hz strongly attenuated", at_40 < -10.0, f"{at_40:+.2f} dB")
+    check("rolloff is monotonic", at_40 < at_300 < at_1k + 0.5)
+
+    # DC offset is what a plosive thump looks like at the extreme.
+    hpf = HighPassFilter(80.0, sr)
+    dc = np.full(sr // 2, 5000, np.int16)
+    out = hpf.process(dc)
+    check("DC offset removed", abs(int(out[-1])) < 50, f"tail={int(out[-1])}")
+
+    # State must persist across frames, or every frame boundary is a click.
+    sig = _tone(200.0, 0.3, sr)
+    whole = HighPassFilter(80.0, sr).process(sig)
+    chunked_f = HighPassFilter(80.0, sr)
+    chunked = np.concatenate([chunked_f.process(sig[i:i + 480])
+                              for i in range(0, sig.size, 480)])
+    check("chunked output matches single-pass (state carries)",
+          np.array_equal(whole[:chunked.size], chunked),
+          f"max diff {int(np.max(np.abs(whole[:chunked.size].astype(np.int32) - chunked.astype(np.int32))))}")
+
+    # Disabled must be a true passthrough.
+    off = HighPassFilter(0.0, sr)
+    check("cutoff 0 disables the filter", off.process(sig) is sig)
+
+    try:
+        HighPassFilter(9000.0, sr)
+        check("rejects cutoff above Nyquist", False)
+    except ValueError:
+        check("rejects cutoff above Nyquist", True)
+
+
 def main() -> int:
-    for fn in (test_config, test_levels, test_channels, test_gain):
+    for fn in (test_config, test_levels, test_channels, test_gain, test_highpass):
         fn()
     print()
     if failures:

@@ -42,6 +42,14 @@ audio:
   # give away. Clipped audio hurts whisper far more than a quieter signal does.
   alsa_capture_percent: 62
 
+  # Second-order high-pass cutoff, in Hz. 0 disables.
+  #
+  # Speech carries essentially nothing below 80 Hz, but a close-mic'd cheap
+  # capsule carries plenty: plosive thump on P/B/T, the proximity-effect bass
+  # lift, desk rumble, DC offset. Removing it helps whisper (no energy that
+  # encodes no phonemes) and helps the VAD (no triggering on breath blasts).
+  highpass_hz: 80
+
   # Software gain applied after capture, as a last resort. This amplifies the
   # noise floor along with your voice, so raise alsa_capture_percent first.
   # 1.0 = off.
