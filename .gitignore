@@ -16,3 +16,6 @@ models/
 # Local overrides of config/default.yaml.
 config/local.yaml
 .DS_Store
+
+# whisper.cpp / llama.cpp checkouts — rebuilt on the Pi by scripts, not vendored.
+vendor/

@@ -17,12 +17,19 @@ fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# --delete keeps the Pi a mirror of the repo, which means anything present only
+# on the Pi is destroyed. Build outputs and model weights live only on the Pi, so
+# the exclude list is load-bearing, not cosmetic.
+#
+# It is driven from .gitignore rather than a hand-maintained list: a second copy
+# of that list will drift, and the failure mode is silent destruction of a
+# multi-minute build. (rsync does not delete excluded files unless you also pass
+# --delete-excluded, which we deliberately do not.)
 rsync -av --delete \
+  --filter=':- .gitignore' \
   --exclude '.git/' \
-  --exclude '.venv*/' \
+  --exclude 'vendor/' \
   --exclude 'models/' \
-  --exclude '__pycache__/' \
-  --exclude '*.wav' \
   "$REPO_ROOT/" "$PI_HOST:$PI_PATH/"
 
 echo
