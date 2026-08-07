@@ -26,7 +26,7 @@ from .hid_keycodes import MODIFIER_NAMES, MOD_NONE, NAMED_KEYS
 
 # Spoken profile names. Kept here rather than imported from llm.PROFILES so a
 # missing llama-server cannot stop "raw mode" from working.
-PROFILE_NAMES = ("raw", "clean", "slack", "commit", "email")
+PROFILE_NAMES = ("raw", "clean", "slack", "commit", "email", "structured")
 
 _WORD_COUNTS = {
     "once": 1, "twice": 2, "thrice": 3,

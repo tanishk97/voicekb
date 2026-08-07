@@ -26,7 +26,7 @@ below it is verified on real hardware.
 | 2 | VAD segmentation | `scripts/transcribe_file.py` | **working**; webrtcvad, offline-tunable |
 | 3 | whisper.cpp STT | `scripts/bench_whisper.sh` | **working**; base.en-q5_1 at 0.29x realtime (cooled) |
 | 4 | Bluetooth HID output | `voicekb/bt_hid.py --serve` | **working**; typed into macOS over an encrypted link |
-| 5 | LLM reformatting + profiles | `scripts/bench_llm.py` | **working**; Qwen2.5-1.5B, 0.7-2.1s |
+| 5 | LLM reformatting + profiles | `scripts/bench_llm.py` | **working**; Qwen2.5-1.5B, 6 profiles |
 | — | **End-to-end speak-to-type** | `scripts/run_voicekb.py` | **working** |
 | 6 | GPIO button | `scripts/test_button.py` | **working**; push-to-talk |
 
@@ -361,6 +361,43 @@ The same guard also catches the model answering rather than rewriting — the
 Note this is a **reliability** property more than a security one: the only person
 speaking into the mic is you. The realistic failure is dictating an
 instruction-shaped sentence and getting a haiku typed into Slack.
+
+### The `structured` profile
+
+`commit` and `slack` compress; `clean` only strips filler. Nothing *organises*
+speech while keeping all of it — that is what `structured` is for. It breaks
+dictation into short paragraphs and bullets the things you enumerated, and is
+told explicitly that shortening means it has failed.
+
+Its `min_overlap` floor is **0.6**, higher than every other profile including
+`clean`. That is the guard doing real work here: the failure mode for this
+profile is the model quietly summarising, and a faithful restructure keeps
+nearly all the content words, so a low score means it compressed when it was
+told not to.
+
+In practice Qwen2.5-1.5B answers it with well-separated *sentences* rather than
+`- ` bullets, and that was left alone deliberately.
+
+Measured on the same rambling three-issue transcript:
+
+| Output shape | Overlap | Result |
+|--------------|---------|--------|
+| prose, production prompt | **0.88** | accepted; kept every point |
+| bullets, bullet-focused prompt | 0.46 | **rejected**; dropped the plan sentence |
+
+Pushing harder for bullets produced them — and lost *"I think we fix the token
+today and the rest tomorrow"*, the only sentence saying what to actually do. The
+guard caught it, so the user would have got raw text rather than a lossy list.
+
+Be careful about the causal claim: the bullet-focused probe also omitted the
+fidelity clauses, so this is not a clean bullets-versus-prose experiment. What it
+does establish is that the shipped configuration keeps everything at 0.88, and
+that leaning harder on formatting is where content started disappearing. At this
+model size, formatting instructions and fidelity instructions compete.
+
+Sentence output has an incidental virtue too: **no newlines**. Newlines type as
+Enter, which is right in a document and wrong in Slack, where it would send each
+line as its own message.
 
 ### `clean` does not use the model, and that was a deliberate reversal
 

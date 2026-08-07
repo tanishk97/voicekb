@@ -169,7 +169,7 @@ def main() -> int:
     ap.add_argument("--no-trailing-space", action="store_true")
     ap.add_argument("--delay-ms", type=float, default=15.0)
     ap.add_argument("--profile", default=None,
-                    help="clean | slack | commit | email | raw "
+                    help="clean | slack | commit | email | structured | raw "
                          "(overrides llm.profile in config)")
     ap.add_argument("--no-llm", action="store_true",
                     help="type the raw transcription, bypassing the LLM")

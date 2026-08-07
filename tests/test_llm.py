@@ -35,13 +35,38 @@ def check(name: str, cond: bool, detail: str = "") -> None:
 
 def test_profiles() -> None:
     print("=== profiles ===")
-    for want in ("raw", "clean", "slack", "commit", "email"):
+    for want in ("raw", "clean", "slack", "commit", "email", "structured"):
         check(f"{want!r} exists", want in PROFILES)
     check("default is 'clean' (AI-cleaned is the default mode)",
           DEFAULT_PROFILE == "clean")
     check("raw has no system prompt", PROFILES["raw"].system_prompt == "")
     check("commit is capped short", PROFILES["commit"].max_tokens <= 64)
     check("email allows more room", PROFILES["email"].max_tokens >= 256)
+
+
+def test_structured_profile() -> None:
+    """Reorganise without shortening -- the opposite job from `commit`."""
+    print("=== structured profile ===")
+    st = PROFILES["structured"]
+    check("uses the model", st.uses_llm)
+    check("has room to be as long as the input", st.max_tokens >= 500,
+          f"{st.max_tokens}")
+    check("is far stricter than the compressing profiles",
+          st.min_overlap > PROFILES["commit"].min_overlap
+          and st.min_overlap > PROFILES["slack"].min_overlap,
+          f"{st.min_overlap}")
+    check("stricter than clean, since it must keep everything",
+          st.min_overlap > PROFILES["clean"].min_overlap)
+
+    prompt = st.system_prompt.lower()
+    check("explicitly forbids summarising", "not summarisation" in prompt)
+    check("explicitly forbids shortening", "do not shorten" in prompt)
+    check("asks for bullets when the speaker enumerated", "bulleted list" in prompt)
+    check("warns that a short result means failure", "roughly as long" in prompt)
+
+    # commit compresses, structured must not: their floors encode that.
+    check("commit is permissive where structured is strict",
+          PROFILES["commit"].min_overlap <= 0.25 <= st.min_overlap)
 
 
 def test_system_prompt() -> None:
@@ -144,7 +169,8 @@ def test_overlap_guard() -> None:
 
 
 def main() -> int:
-    for fn in (test_profiles, test_system_prompt, test_strip_wrapping,
+    for fn in (test_profiles, test_structured_profile, test_system_prompt,
+               test_strip_wrapping,
                test_raw_bypass, test_unknown_profile, test_overlap_guard):
         fn()
     print()

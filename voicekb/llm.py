@@ -166,6 +166,28 @@ PROFILES: dict[str, Profile] = {
         max_tokens=48,
         min_overlap=0.25,
     ),
+    "structured": Profile(
+        name="structured",
+        description="Reorganise into readable structure WITHOUT shortening it.",
+        system_prompt=(
+            "You reorganise dictated speech into clearly structured written "
+            "text. Break it into short paragraphs, and use a '- ' bulleted list "
+            "wherever the speaker enumerated things ('first... second...', 'one "
+            "is... the other is...'). Put any concluding thought on its own "
+            "line. "
+            "This is REORGANISATION, NOT SUMMARISATION. Keep every point, every "
+            "detail and every number the speaker gave. Do not shorten, do not "
+            "merge points together, do not drop anything you judge minor, and do "
+            "not add anything. If the result is not roughly as long as the "
+            "input, you have done it wrong."
+        ),
+        max_tokens=600,
+        # Much stricter than the compressing profiles. A faithful restructure
+        # keeps nearly all the content words, so a low score here means the
+        # model summarised when it was told not to -- which is exactly the
+        # failure this profile exists to avoid.
+        min_overlap=0.6,
+    ),
     "email": Profile(
         name="email",
         description="Expanded, more formal prose.",
