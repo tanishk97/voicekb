@@ -63,6 +63,78 @@ def collapse_whitespace(text: str) -> str:
     return text.strip()
 
 
+# Standalone hesitation sounds. Unambiguous -- these are never content.
+_HESITATIONS = r"(?:um+|uh+|erm+|ehm+|hmm+|mm+|ah+|er)"
+
+# Parenthetical verbal tics. Deliberately conservative: "like", "actually",
+# "basically" and "right" all have legitimate uses and are NOT removed, because
+# deleting real words is far worse than leaving a stray "like" in.
+_TICS = r"(?:you know|i mean|sort of|kind of)"
+
+# Trailing check-in tags. Speech habits, not content.
+_TRAILING_TAGS = r"(?:you know what,?\s*right|if that makes sense|does that make sense|you know|right)"
+
+_RE_HESITATION = re.compile(rf"\b{_HESITATIONS}\b[,]?\s*", re.IGNORECASE)
+# Swallow the commas that bracket a mid-sentence tic, so "We should, you know,
+# ship it" does not leave "We should, ship it".
+_RE_TIC = re.compile(rf"\s*,?\s*\b{_TICS}\b\s*,?\s*", re.IGNORECASE)
+_RE_LEADING_TIC = re.compile(rf"^\s*\b{_TICS}\b\s*,?\s*", re.IGNORECASE)
+# Capture the sentence-final punctuation the tag carried, so it can be put back
+# only if removing the tag left the sentence without any.
+_RE_TRAILING_TAG = re.compile(
+    rf"[,\s]*\b{_TRAILING_TAGS}\b[\s,]*([.?!]*)\s*$", re.IGNORECASE
+)
+
+
+def strip_fillers(text: str) -> str:
+    """Remove hesitation sounds and verbal tics deterministically.
+
+    This exists because a 1.5B model could not be trusted with it. Asked to
+    remove filler, Qwen2.5-1.5B also silently dropped content -- "The build is
+    red and I will look at it after lunch" came back as "I will look at the
+    build after lunch", losing the only fact in the sentence. The content-overlap
+    guard scores that 0.75, well above any usable floor, so it cannot be caught
+    structurally either.
+
+    Filler removal is a bounded, well-specified problem. A regex does it in
+    microseconds, cannot hallucinate, and cannot delete a word that was not on
+    the list. The LLM is better spent on profiles that genuinely transform text.
+
+    Conservative by design: ambiguous words like "like" and "actually" are left
+    alone, because leaving filler in is a much smaller failure than deleting
+    meaning.
+    """
+    if not text.strip():
+        return text
+
+    # Drop the trailing tag, then restore its punctuation only if what remains
+    # does not already end a sentence. Otherwise "...broke again. You know what,
+    # right?" yields a stray "...broke again.?".
+    match = _RE_TRAILING_TAG.search(text)
+    if match:
+        tail_punct = match.group(1)
+        out = text[: match.start()].rstrip(" ,")
+        if tail_punct and not out.endswith((".", "?", "!")):
+            out += tail_punct[0]
+    else:
+        out = text
+
+    out = _RE_LEADING_TIC.sub("", out)
+    out = _RE_TIC.sub(" ", out)
+    out = _RE_HESITATION.sub("", out)
+    out = re.sub(r"\s+([,.?!])", r"\1", out)
+    out = re.sub(r"^[\s,]+", "", out)
+    out = collapse_whitespace(out)
+    # Restore a capital if stripping a leading filler exposed a lowercase start.
+    #
+    # Gated on the source containing any uppercase at all, because whisper
+    # sometimes returns entirely lowercase text. Capitalising only the first word
+    # of an all-lowercase transcript would look like a typo rather than a fix.
+    if out and out[:1].islower() and any(c.isupper() for c in text):
+        out = out[0].upper() + out[1:]
+    return out
+
+
 def is_non_speech(text: str) -> bool:
     """True if whisper heard a sound rather than words, and nothing should be typed.
 

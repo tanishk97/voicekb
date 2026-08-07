@@ -243,6 +243,52 @@ class BluetoothHIDKeyboard:
         self._interrupt_conn, _ = self._interrupt_sock.accept()
         return cinfo[0]
 
+    def connect_to(self, address: str, timeout_s: float = 10.0) -> bool:
+        """Open both HID channels *outward* to a known host. True on success.
+
+        Real Bluetooth keyboards initiate reconnection to their paired host
+        rather than waiting to be called. Listening only is why a restarted
+        daemon strands itself: macOS keeps the baseband ACL link open, believes
+        it is still connected, and never reopens the L2CAP channels -- so the Pi
+        sits in accept() indefinitely while the Mac shows a live connection.
+
+        Connecting outward removes the dependency on the host noticing.
+        """
+        ctrl = intr = None
+        try:
+            ctrl = socket.socket(
+                socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET, socket.BTPROTO_L2CAP
+            )
+            ctrl.settimeout(timeout_s)
+            ctrl.connect((address, PSM_CONTROL))
+
+            intr = socket.socket(
+                socket.AF_BLUETOOTH, socket.SOCK_SEQPACKET, socket.BTPROTO_L2CAP
+            )
+            intr.settimeout(timeout_s)
+            intr.connect((address, PSM_INTERRUPT))
+        except OSError:
+            for s in (ctrl, intr):
+                if s is not None:
+                    try:
+                        s.close()
+                    except OSError:
+                        pass
+            return False
+
+        # Back to blocking: send() must not time out mid-report.
+        ctrl.settimeout(None)
+        intr.settimeout(None)
+        self._control_conn, self._interrupt_conn = ctrl, intr
+        return True
+
+    def connect_or_accept(self, known_host: str | None = None,
+                          timeout_s: float = 10.0) -> str:
+        """Try the host we know about first, then fall back to waiting."""
+        if known_host and self.connect_to(known_host, timeout_s):
+            return known_host
+        return self.accept()
+
     @property
     def connected(self) -> bool:
         return self._interrupt_conn is not None

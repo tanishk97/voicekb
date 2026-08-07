@@ -30,7 +30,7 @@ from voicekb.bt_hid import BluetoothHIDKeyboard  # noqa: E402
 from voicekb.config import DEFAULT_CONFIG, Config  # noqa: E402
 from voicekb.stt import WhisperSTT  # noqa: E402
 from voicekb.llm import LlamaReformatter  # noqa: E402
-from voicekb.text import is_non_speech, normalize_for_hid  # noqa: E402
+from voicekb.text import is_non_speech, normalize_for_hid, strip_fillers  # noqa: E402
 from voicekb.vad import VadSegmenter  # noqa: E402
 
 _stop = threading.Event()
@@ -72,13 +72,27 @@ def transcribe_worker(
             _log(f"  {secs:.1f}s -> non-speech, ignored (raw: {result.text!r})")
             continue
 
-        text = result.text
+        # Deterministic filler removal for every profile except 'raw', which
+        # promises the exact transcription. It cannot hallucinate or delete
+        # anything that was not on the filler list.
+        text = result.text if profile == "raw" else strip_fillers(result.text)
+        if text != result.text:
+            _log(f"  fillers: {result.text!r} -> {text!r}")
         if llm is not None:
             try:
                 shaped = llm.reformat(text, profile)
-                if shaped.changed:
-                    _log(f"  llm[{profile}] {shaped.elapsed_seconds:.1f}s: "
-                         f"{text!r} -> {shaped.text!r}")
+                # Log all three outcomes. Logging only changes made "no line at
+                # all" mean either "left it alone" or "rewrite rejected", which
+                # are very different and indistinguishable in the journal.
+                if shaped.rejected:
+                    _log(f"  llm[{profile}] {shaped.elapsed_seconds:.1f}s "
+                         f"REJECTED (overlap {shaped.overlap:.2f}); typing raw")
+                elif shaped.changed:
+                    _log(f"  llm[{profile}] {shaped.elapsed_seconds:.1f}s "
+                         f"(overlap {shaped.overlap:.2f}): {text!r} -> {shaped.text!r}")
+                else:
+                    _log(f"  llm[{profile}] {shaped.elapsed_seconds:.1f}s "
+                         "left it unchanged")
                 text = shaped.text
             except Exception as exc:  # noqa: BLE001
                 # Type the raw transcription rather than losing the utterance.

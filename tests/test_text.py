@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from voicekb.hid_keycodes import unmappable  # noqa: E402
 from voicekb.text import (  # noqa: E402
     collapse_whitespace,
+    strip_fillers,
     fold_to_ascii,
     normalize_for_hid,
     strip_annotations,
@@ -97,9 +98,48 @@ def test_end_to_end_typeable() -> None:
         check(f"typeable: {raw.strip()[:34]!r}", not left, f"-> {out!r}" if left else "")
 
 
+def test_strip_fillers() -> None:
+    """Deterministic, because the 1.5B model could not be trusted with it.
+
+    Asked to remove filler, Qwen2.5-1.5B turned "The build is red and I will
+    look at it after lunch" into "I will look at the build after lunch",
+    dropping the only fact in the sentence. The content-overlap guard scores
+    that 0.75 -- far above any usable floor -- so it cannot be caught
+    structurally either.
+    """
+    print("=== deterministic filler removal ===")
+    cases = [
+        ("So, I think the odd token thing broke again. You know what, right?",
+         "So, I think the odd token thing broke again."),
+        ("Can you send me the report by Friday, if that makes sense?",
+         "Can you send me the report by Friday?"),
+        ("We should, you know, ship it today.", "We should ship it today."),
+        ("uh I mean the server is down", "The server is down"),
+        ("um so the deploy broke again i think it is the auth token thing you know",
+         "so the deploy broke again i think it is the auth token thing"),
+    ]
+    for src, want in cases:
+        got = strip_fillers(src)
+        check(f"{src[:38]!r}", got == want, "" if got == want else f"got {got!r}")
+
+    print("  -- must not touch real content --")
+    for untouched in [
+        "The build is red and I will look at it after lunch.",
+        "I like the new design.",          # 'like' is ambiguous, left alone
+        "Turn right at the light.",        # 'right' is ambiguous, left alone
+        "It works basically everywhere.",  # 'basically' left alone
+    ]:
+        check(f"unchanged: {untouched[:38]!r}", strip_fillers(untouched) == untouched,
+              "" if strip_fillers(untouched) == untouched else f"got {strip_fillers(untouched)!r}")
+
+    check("empty stays empty", strip_fillers("") == "")
+    check("no stray punctuation left behind", ".?" not in strip_fillers(
+        "So it broke again. You know what, right?"))
+
+
 def main() -> int:
     for fn in (test_typography, test_annotations, test_whitespace, test_non_speech,
-               test_end_to_end_typeable):
+               test_strip_fillers, test_end_to_end_typeable):
         fn()
     print()
     if failures:

@@ -50,8 +50,8 @@ _GUARD = (
 
 _FIDELITY = (
     "Never invent facts, names, numbers, or details that are not in the "
-    "transcript. Preserve the speaker's meaning exactly. If the transcript is "
-    "already clean, return it unchanged."
+    "transcript. Preserve the speaker's meaning exactly. If nothing needs "
+    "removing or correcting, return it unchanged."
 )
 
 
@@ -100,6 +100,11 @@ class Profile:
     # transcription is typed instead. Profiles that legitimately rewrite harder
     # get more room.
     min_overlap: float = 0.5
+    # Whether this profile calls the model at all. 'clean' does not: filler
+    # removal is deterministic (see text.strip_fillers) because the model
+    # dropped real content while doing it, and the overlap guard scores such
+    # drops around 0.75 -- far too high to catch.
+    uses_llm: bool = True
 
     def build_system(self, vocabulary: list[str] | None = None) -> str:
         parts = [self.system_prompt, _FIDELITY, _GUARD]
@@ -114,19 +119,30 @@ class Profile:
 PROFILES: dict[str, Profile] = {
     "raw": Profile(
         name="raw",
-        description="Exact transcription; the LLM is bypassed entirely.",
+        description="Exact transcription; no filler removal, no LLM.",
         system_prompt="",
+        uses_llm=False,
     ),
     "clean": Profile(
         name="clean",
-        description="Default. Fix grammar, punctuation and filler; keep the voice.",
+        description="Default. Deterministic filler removal; no model involved.",
         system_prompt=(
-            "You clean up dictated speech. Remove filler words (um, uh, like, "
-            "you know), fix grammar and punctuation, and repair obvious "
-            "speech-to-text errors. Keep the speaker's own wording and tone -- "
-            "do not make it more formal, and do not summarise."
+            "You clean up dictated speech so it reads as written text. "
+            "Remove filler and conversational tics wherever they appear: 'um', "
+            "'uh', 'like', 'I mean', 'sort of', 'you know'. Remove trailing "
+            "check-in tags such as 'you know what, right?', 'if that makes "
+            "sense', or 'does that make sense' -- these are speech habits, not "
+            "content. Fix grammar and punctuation. Note that the transcript is "
+            "usually already capitalised and punctuated, so filler removal is "
+            "the main work; do not conclude there is nothing to do just because "
+            "it is grammatical. Keep every substantive point and keep the "
+            "speaker's wording and tone: do not make it more formal, do not "
+            "summarise, do not add anything. Always keep sentence "
+            "capitalisation and end punctuation -- a sentence that was a "
+            "question stays a question."
         ),
         min_overlap=0.5,
+        uses_llm=False,
     ),
     "slack": Profile(
         name="slack",
@@ -200,8 +216,8 @@ class LlamaReformatter:
         profile = PROFILES.get(profile_name)
         if profile is None:
             raise KeyError(f"unknown profile {profile_name!r}; have {sorted(PROFILES)}")
-        if profile.name == "raw" or not text.strip():
-            return Reformatted(text=text, profile="raw", elapsed_seconds=0.0)
+        if not profile.uses_llm or not text.strip():
+            return Reformatted(text=text, profile=profile.name, elapsed_seconds=0.0)
 
         payload = {
             "messages": [
