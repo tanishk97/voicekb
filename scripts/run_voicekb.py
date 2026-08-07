@@ -63,7 +63,12 @@ def transcribe_worker(
     profile_ref: list,
     substitutions: dict[str, str],
     button: ProfileButton | None,
+    log_text: bool,
 ) -> None:
+    def show(text: str) -> str:
+        """Render text for the journal, or just its size when redacting."""
+        return repr(text) if log_text else f"<{len(text)} chars>"
+
     while not _stop.is_set():
         item = work.get()
         if item is None:
@@ -80,7 +85,7 @@ def transcribe_worker(
         # Handing "(crickets chirping)" to a reformatter just invites it to
         # invent a sentence about crickets.
         if is_non_speech(result.text):
-            _log(f"  {secs:.1f}s -> non-speech, ignored (raw: {result.text!r})")
+            _log(f"  {secs:.1f}s -> non-speech, ignored (raw: {show(result.text)})")
             continue
 
         # Deterministic filler removal for every profile except 'raw', which
@@ -91,7 +96,7 @@ def transcribe_worker(
         profile = profile_ref[0]
         text = apply_substitutions(result.text, substitutions)
         if text != result.text:
-            _log(f"  substituted: {result.text!r} -> {text!r}")
+            _log(f"  substituted: {show(result.text)} -> {show(text)}")
         # A whole-utterance command is acted on, never typed. Partial matches
         # deliberately fall through: 'press enter your name' is a sentence.
         cmd = parse_command(text)
@@ -115,7 +120,7 @@ def transcribe_worker(
         if profile != "raw":
             text = strip_fillers(text)
         if text != before_fillers:
-            _log(f"  fillers: {before_fillers!r} -> {text!r}")
+            _log(f"  fillers: {show(before_fillers)} -> {show(text)}")
         if llm is not None:
             try:
                 shaped = llm.reformat(text, profile)
@@ -129,7 +134,7 @@ def transcribe_worker(
                          f"REJECTED (overlap {shaped.overlap:.2f}); typing raw")
                 elif shaped.changed:
                     _log(f"  llm[{profile}] {shaped.elapsed_seconds:.1f}s "
-                         f"(overlap {shaped.overlap:.2f}): {text!r} -> {shaped.text!r}")
+                         f"(overlap {shaped.overlap:.2f}): {show(text)} -> {show(shaped.text)}")
                 else:
                     _log(f"  llm[{profile}] {shaped.elapsed_seconds:.1f}s "
                          "left it unchanged")
@@ -145,7 +150,7 @@ def transcribe_worker(
             _log(f"  {secs:.1f}s -> nothing left to type after normalization")
             continue
 
-        _log(f"  {secs:.1f}s -> {result.elapsed_seconds:.1f}s -> {text!r}")
+        _log(f"  {secs:.1f}s -> {result.elapsed_seconds:.1f}s -> {show(text)}")
         if dry_run:
             continue
         try:
@@ -300,7 +305,8 @@ def main() -> int:
     worker = threading.Thread(
         target=transcribe_worker,
         args=(work, stt, kb, sr, not args.no_trailing_space, args.dry_run,
-              llm, profile_ref, dict(cfg.stt.substitutions), button),
+              llm, profile_ref, dict(cfg.stt.substitutions), button,
+              cfg.logging.log_transcripts),
         daemon=True,
     )
     worker.start()

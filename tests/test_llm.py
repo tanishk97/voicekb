@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from voicekb.llm import (  # noqa: E402
     DEFAULT_PROFILE,
     content_overlap,
+    expansion_ratio,
     PROFILES,
     LlamaReformatter,
     Reformatted,
@@ -168,8 +169,46 @@ def test_overlap_guard() -> None:
           content_overlap("the and but for", "the and but for") == 1.0)
 
 
+def test_expansion_guard() -> None:
+    """min_overlap is blind to invention; the length ceiling is not.
+
+    Qwen2.5-3B scored 0.61 overlap -- a pass -- on a rewrite that invented a
+    whole concluding sentence, because everything real was still present.
+    Overlap only asks how much of the source SURVIVED.
+    """
+    print("=== expansion guard ===")
+    src = ("so we had about 40 users hit the error yesterday and around 12 of them "
+           "retried and it worked the second time so I think the retry logic is fine "
+           "but the first attempt is timing out at 30 seconds which is too aggressive")
+    invented = ("- I had about 40 users encounter an error yesterday. - Approximately 12 "
+                "of these users were able to retry and the issue resolved on the second "
+                "attempt. - I believe the retry logic is functioning correctly. - However, "
+                "the first attempt is timing out after 30 seconds, which is considered too "
+                "aggressive. - This suggests that the initial timeout period needs "
+                "adjustment to ensure a smoother user experience.")
+    faithful = ("okay so there are three things wrong with the deploy. first, the auth "
+                "token expired. second, the health check is pointing at the old port.")
+
+    cap = PROFILES["structured"].max_expansion
+    check("structured has a ceiling", cap is not None)
+    check("invention exceeds it", expansion_ratio(src, invented) > cap,
+          f"{expansion_ratio(src, invented):.2f} > {cap}")
+    check("faithful output does not", expansion_ratio(src, faithful) <= cap,
+          f"{expansion_ratio(src, faithful):.2f}")
+
+    check("overlap ALONE would have passed the invention",
+          content_overlap(src, invented) >= PROFILES["structured"].min_overlap,
+          f"overlap {content_overlap(src, invented):.2f} -- this is why the ceiling exists")
+
+    check("email may legitimately expand", PROFILES["email"].max_expansion > cap)
+    check("commit has no ceiling (it only ever shrinks)",
+          PROFILES["commit"].max_expansion is None)
+    check("empty source does not divide by zero", expansion_ratio("", "words here") == 1.0)
+
+
 def main() -> int:
-    for fn in (test_profiles, test_structured_profile, test_system_prompt,
+    for fn in (test_profiles, test_structured_profile, test_expansion_guard,
+               test_system_prompt,
                test_strip_wrapping,
                test_raw_bypass, test_unknown_profile, test_overlap_guard):
         fn()

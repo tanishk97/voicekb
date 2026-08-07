@@ -532,6 +532,41 @@ microphone is the product.
 
 `profile_cycle` mode is still available for a second button.
 
+### Bigger is not better: Qwen2.5-3B was rejected
+
+With latency deprioritised, a 3B model looked like the obvious quality upgrade.
+It measured worse and was reverted.
+
+On the same three `structured` cases, 3B produced proper `- ` bullets — a real
+formatting win — but:
+
+- **It invented content.** Given a transcript about retry timeouts it added
+  *"This suggests that the initial timeout period needs adjustment to ensure a
+  smoother user experience"*, a sentence the speaker never said.
+- **It changed meaning.** "we had about 40 users" became "I had about 40 users".
+- **It over-structured.** A single two-clause sentence came back as malformed
+  bullets with a stray `-Conclusion:-` artifact.
+- 16.2s versus 5.7s.
+
+Qwen2.5-1.5B scored **1.00 overlap on all three** with no invention. Its one
+weakness is leaving some input unstructured rather than mangling it, which for
+a fidelity-first profile is the better failure.
+
+### The invention exposed a hole in the guard
+
+`min_overlap` is **asymmetric**. It measures how much of the source *survived*,
+so it catches deletion and drift and is blind to addition. The 3B's invented
+sentence scored **0.61 — a pass** — because everything real was still there.
+
+`max_expansion` closes that: a ceiling on output length as a multiple of input
+length. The invented rewrite scores 1.57 against `structured`'s cap of 1.4 and
+is rejected; faithful output scores 0.93. `email` gets 3.0 because expanding
+terse speech into prose is its job; `commit` has no ceiling because it only ever
+shrinks.
+
+A floor catches the model summarising. A ceiling catches it writing for you.
+Both are structural, and neither depends on the model cooperating.
+
 ## Hardware notes
 
 - **The Pi 5's USB-C port is power-only.** It has no USB gadget/data mode, so

@@ -36,6 +36,7 @@ print(m.group(1) if m else "")
 PY
 }
 
+MODEL_OVERRIDE="${MODEL:-}"
 MODEL="${MODEL:-$(read_cfg model)}"
 THREADS="${THREADS:-$(read_cfg threads)}"
 CTX="${CTX:-$(read_cfg context_size)}"
@@ -59,10 +60,25 @@ echo "threads : $THREADS   context: $CTX   port: $PORT"
 ARGS=(-m "$MODEL" -t "$THREADS" -c "$CTX" --host 127.0.0.1 --port "$PORT")
 
 if [[ "${1:-}" == "--service" ]]; then
-  sudo systemctl stop "$UNIT" 2>/dev/null || true
-  sudo systemctl reset-failed "$UNIT" 2>/dev/null || true
-  sudo systemd-run --unit="$UNIT" --working-directory="$REPO_ROOT" \
-    "$REPO_ROOT/$BIN" "${ARGS[@]}"
+  # If install_services.sh has been run there is a real unit file, and
+  # systemd-run refuses to create a transient unit of the same name
+  # ("Unit ... was already loaded or has a fragment file"). Use the installed
+  # unit in that case; it reads the model from config, so a MODEL override has
+  # to go through config rather than the environment.
+  if systemctl cat "$UNIT" >/dev/null 2>&1 \
+     && [[ -f /etc/systemd/system/$UNIT.service ]]; then
+    if [[ -n "${MODEL_OVERRIDE:-}" ]]; then
+      echo "NOTE: $UNIT is installed as a persistent unit, which reads llm.model" >&2
+      echo "      from config/default.yaml. Edit that to change the model." >&2
+    fi
+    sudo systemctl restart "$UNIT.service"
+    echo "restarted $UNIT.service (installed unit)"
+  else
+    sudo systemctl stop "$UNIT" 2>/dev/null || true
+    sudo systemctl reset-failed "$UNIT" 2>/dev/null || true
+    sudo systemd-run --unit="$UNIT" --working-directory="$REPO_ROOT" \
+      "$REPO_ROOT/$BIN" "${ARGS[@]}"
+  fi
   echo "started $UNIT; follow with: journalctl -u $UNIT -f"
   echo "health:  curl -s localhost:$PORT/health"
 else

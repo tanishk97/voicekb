@@ -68,7 +68,8 @@ class VadConfig:
 
 @dataclass(frozen=True)
 class SttConfig:
-    model: str = "models/ggml-base.en-q5_1.bin"
+    # small.en, viable only with active cooling. See config/default.yaml.
+    model: str = "models/ggml-small.en-q5_1.bin"
     binary: str = "vendor/whisper.cpp/build/bin/whisper-cli"
     threads: int = 4
     # Beam search costs base.en only ~0.06s over greedy on this hardware, so the
@@ -102,6 +103,19 @@ class LlmConfig:
     # If the server is unreachable, type the raw transcription rather than
     # dropping the utterance. Losing dictation is worse than losing formatting.
     fallback_to_raw: bool = True
+
+
+@dataclass(frozen=True)
+class LoggingConfig:
+    # Whether the journal records the transcribed TEXT of each utterance.
+    #
+    # True is genuinely useful -- almost every bug in this build was diagnosed by
+    # reading what whisper heard versus what got typed. But it means the journal
+    # accumulates everything ever dictated into this device, which on a dictation
+    # tool could be anything. Set false and the logs keep timings and lengths
+    # only, which is enough to see the pipeline working without recording what
+    # you said.
+    log_transcripts: bool = True
 
 
 @dataclass(frozen=True)
@@ -140,6 +154,7 @@ class Config:
     stt: SttConfig
     llm: LlmConfig
     buttons: ButtonsConfig
+    logging: LoggingConfig
 
     @classmethod
     def load(cls, path: Path | str = DEFAULT_CONFIG) -> "Config":
@@ -163,4 +178,5 @@ class Config:
             stt=SttConfig(**stt_raw),
             llm=LlmConfig(**llm_raw),
             buttons=ButtonsConfig(**btn_raw),
+            logging=LoggingConfig(**raw.get("logging", {})),
         )

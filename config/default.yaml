@@ -80,7 +80,15 @@ vad:
   min_level_dbfs: -42
 
 stt:
-  model: models/ggml-base.en-q5_1.bin
+  # small.en over base.en for accuracy. It only became viable once the active
+  # cooler was fitted: previously it hit 81.8 C and was throttled to 3.27x
+  # realtime; cooled it runs at 0.94x and peaks at 51.6 C.
+  #
+  # Transcription errors propagate and nothing downstream can undo them --
+  # base.en heard 'auth token' as 'odd token', and no reformatting layer can
+  # recover a word that was never transcribed. Accuracy here is worth more
+  # than anywhere else in the pipeline.
+  model: models/ggml-small.en-q5_1.bin
   binary: vendor/whisper.cpp/build/bin/whisper-cli
   threads: 4
   beam_size: 5
@@ -154,3 +162,14 @@ buttons:
 
   # Only used when mode is profile_cycle.
   cycle: [clean, raw]
+
+logging:
+  # Whether the journal records the transcribed TEXT of each utterance.
+  #
+  # True is genuinely useful -- nearly every bug in this build was found by
+  # comparing what whisper heard against what got typed. But it does mean the
+  # journal accumulates a record of everything ever dictated into this device.
+  # Set false to keep timings and lengths only.
+  #
+  # Retention is capped separately by scripts/setup_logging.sh (200M, 1 week).
+  log_transcripts: true

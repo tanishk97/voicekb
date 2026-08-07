@@ -73,6 +73,23 @@ def _content_words(text: str) -> set[str]:
     }
 
 
+def expansion_ratio(source: str, result: str) -> float:
+    """How much longer the rewrite is than the transcript, in words.
+
+    content_overlap is ASYMMETRIC: it measures how much of the source survived,
+    so it catches deletion and drift but is blind to *addition*. Qwen2.5-3B
+    scored 0.61 -- a pass -- on a rewrite that invented an entire concluding
+    sentence the speaker never said, because everything real was still present.
+
+    Length is the cheap complementary signal. A model that has started writing
+    for you produces noticeably more words than it was given.
+    """
+    src = len(source.split())
+    if src == 0:
+        return 1.0
+    return len(result.split()) / src
+
+
 def content_overlap(source: str, result: str) -> float:
     """Fraction of the source's content words that survive into the result."""
     src = _content_words(source)
@@ -100,6 +117,12 @@ class Profile:
     # transcription is typed instead. Profiles that legitimately rewrite harder
     # get more room.
     min_overlap: float = 0.5
+    # Upper bound on output length as a multiple of input length. None disables.
+    #
+    # This exists because min_overlap cannot see invention -- it only asks how
+    # much of the source survived. A profile that must not add anything needs a
+    # ceiling as well as a floor.
+    max_expansion: float | None = None
     # Whether this profile calls the model at all. 'clean' does not: filler
     # removal is deterministic (see text.strip_fillers) because the model
     # dropped real content while doing it, and the overlap guard scores such
@@ -182,6 +205,7 @@ PROFILES: dict[str, Profile] = {
             "input, you have done it wrong."
         ),
         max_tokens=600,
+        max_expansion=1.4,
         # Much stricter than the compressing profiles. A faithful restructure
         # keeps nearly all the content words, so a low score here means the
         # model summarised when it was told not to -- which is exactly the
@@ -197,6 +221,7 @@ PROFILES: dict[str, Profile] = {
             "greeting and no sign-off unless the speaker dictated one."
         ),
         max_tokens=400,
+        max_expansion=3.0,
         min_overlap=0.25,
     ),
 }
@@ -214,6 +239,7 @@ class Reformatted:
     # therefore the untouched transcription.
     rejected: bool = field(default=False)
     overlap: float = field(default=1.0)
+    expansion: float = field(default=1.0)
 
 
 class LlamaReformatter:
@@ -269,10 +295,13 @@ class LlamaReformatter:
         # Structural guard: if the rewrite stopped being about the transcript,
         # the model was answering rather than rewriting. Type the raw words.
         overlap = content_overlap(text, out)
-        if overlap < profile.min_overlap:
+        expansion = expansion_ratio(text, out)
+        if overlap < profile.min_overlap or (
+            profile.max_expansion is not None and expansion > profile.max_expansion
+        ):
             return Reformatted(
                 text=text, profile=profile.name, elapsed_seconds=elapsed,
-                rejected=True, overlap=overlap,
+                rejected=True, overlap=overlap, expansion=expansion,
             )
         return Reformatted(
             text=out,
@@ -280,6 +309,7 @@ class LlamaReformatter:
             elapsed_seconds=elapsed,
             changed=out.strip() != text.strip(),
             overlap=overlap,
+            expansion=expansion,
         )
 
 
