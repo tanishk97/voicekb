@@ -226,17 +226,23 @@ def main() -> int:
                 _log(f"FATAL: no llama-server at {cfg.llm.base_url}")
                 _log("  start it with: bash scripts/serve_llm.sh --service")
                 return 1
-            # Degrade to raw rather than refusing to run. A dictation device
-            # that types nothing is worse than one that types unpolished text.
-            _log(f"WARNING: no llama-server at {cfg.llm.base_url}; "
-                 "typing raw transcription")
-            _log("  start it with: bash scripts/serve_llm.sh --service")
-            llm = None
+            # Warn, but KEEP the client. Discarding it here made a one-second
+            # startup race permanent: both units start together, the model takes
+            # ~9s to load, so the pipeline checked, found nothing, and ran
+            # without the LLM until someone restarted it -- while the server sat
+            # healthy the whole time.
+            #
+            # Each utterance now attempts the call and falls back to raw only
+            # for that utterance, so the daemon heals itself the moment the
+            # server is ready.
+            _log(f"WARNING: llama-server not up yet at {cfg.llm.base_url}; "
+                 "typing raw until it is")
+            _log("  it will start reformatting as soon as the server answers")
     # One-element list so the worker thread and spoken commands share it.
     profile_ref = [profile]
     from voicekb.llm import PROFILES as _PROFILES
-    _uses = llm is not None and _PROFILES[profile].uses_llm
-    _log(f"profile: {profile}" + ("" if _uses else "  (no model in this profile)"))
+    _log(f"profile: {profile}"
+         + ("" if _PROFILES[profile].uses_llm else "  (no model in this profile)"))
     _log("say e.g. 'slack mode' or 'press enter' to command it")
 
     # GPIO button. A missing or already-claimed pin must never stop dictation --

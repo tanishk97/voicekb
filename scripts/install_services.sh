@@ -98,6 +98,9 @@ User=root
 # because systemd treats $ and % as specifiers: an inline $(seq ...) fails
 # with "bad unit file setting", which names nothing useful.
 ExecStartPre=/bin/bash $REPO_ROOT/scripts/wait_for_mic.sh 30
+# Give the model a head start so the first utterance after a boot is not
+# transcribed raw. Always exits 0 -- dictation never waits on reformatting.
+ExecStartPre=/bin/bash $REPO_ROOT/scripts/wait_for_llm.sh 45
 WorkingDirectory=$REPO_ROOT
 ExecStart=$PY -u $REPO_ROOT/scripts/run_voicekb.py
 Restart=on-failure
