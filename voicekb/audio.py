@@ -194,10 +194,22 @@ class SoundDeviceSource(AudioSource):
             self._stream.close()
             self._stream = None
 
-    def frames(self) -> Iterator[np.ndarray]:
+    def frames(self, stop: "threading.Event | None" = None) -> Iterator[np.ndarray]:
+        """Yield frames until stopped.
+
+        The queue get is bounded for the same reason accept() polls: a bare
+        blocking call cannot be interrupted by a signal in CPython, so a stalled
+        USB mic would park this thread through shutdown and cost systemd its
+        full stop timeout.
+        """
         cfg = self.cfg
         while True:
-            block = self._queue.get()
+            if stop is not None and stop.is_set():
+                return
+            try:
+                block = self._queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
             mono = to_mono(block, cfg.channel_select)
             # High-pass before gain: removing rumble first means gain is not
             # spending headroom amplifying energy we are about to discard.

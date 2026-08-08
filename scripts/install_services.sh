@@ -52,6 +52,12 @@ Requires=bluetooth.service
 # both display a passkey and expect it typed on the keyboard being paired --
 # impossible here, since typing needs HID channels that open only after pairing.
 ExecStart=/usr/bin/bt-agent -c NoInputNoOutput
+# Shutdown must not wait out the 90s default. A hung service used to make the
+# power button look dead: press one starts a shutdown that sits for 90 seconds
+# with no console to report it, so it reads as "nothing happened".
+# KillMode=mixed sends SIGTERM to the main process and SIGKILL to any stragglers.
+TimeoutStopSec=10
+KillMode=mixed
 Restart=on-failure
 RestartSec=3
 
@@ -69,6 +75,12 @@ After=network.target
 User=$RUN_USER
 WorkingDirectory=$REPO_ROOT
 ExecStart=/bin/bash $REPO_ROOT/scripts/serve_llm.sh
+# Shutdown must not wait out the 90s default. A hung service used to make the
+# power button look dead: press one starts a shutdown that sits for 90 seconds
+# with no console to report it, so it reads as "nothing happened".
+# KillMode=mixed sends SIGTERM to the main process and SIGKILL to any stragglers.
+TimeoutStopSec=10
+KillMode=mixed
 Restart=on-failure
 RestartSec=5
 # Loading a ~1 GB model off the microSD is not instant.
@@ -103,6 +115,12 @@ ExecStartPre=/bin/bash $REPO_ROOT/scripts/wait_for_mic.sh 30
 ExecStartPre=/bin/bash $REPO_ROOT/scripts/wait_for_llm.sh 45
 WorkingDirectory=$REPO_ROOT
 ExecStart=$PY -u $REPO_ROOT/scripts/run_voicekb.py
+# Shutdown must not wait out the 90s default. A hung service used to make the
+# power button look dead: press one starts a shutdown that sits for 90 seconds
+# with no console to report it, so it reads as "nothing happened".
+# KillMode=mixed sends SIGTERM to the main process and SIGKILL to any stragglers.
+TimeoutStopSec=10
+KillMode=mixed
 Restart=on-failure
 RestartSec=5
 

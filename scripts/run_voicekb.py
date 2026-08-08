@@ -297,13 +297,27 @@ def main() -> int:
             _log(f"button unavailable ({exc}); continuing without it")
             button = None
 
+    # Installed BEFORE the first accept(). Previously they came after, which
+    # accidentally made the common case fast -- SIGTERM killed the process
+    # under the default disposition -- while the reconnect accept, which does
+    # run after them, hung for systemd's full 90s stop timeout.
+    def handle_signal(_sig, _frm):  # noqa: ANN001
+        _stop.set()
+
+    signal.signal(signal.SIGINT, handle_signal)
+    signal.signal(signal.SIGTERM, handle_signal)
+
     kb = BluetoothHIDKeyboard(key_delay_s=args.delay_ms / 1000.0)
     if not args.dry_run:
         _log("registering HID profile ...")
         kb.register_profile()
         kb.listen()
         _log("waiting for your Mac to connect (Bluetooth menu -> voicekb) ...")
-        host = kb.accept()
+        host = kb.accept(stop=_stop)
+        if host is None:
+            _log("stopped before a host connected")
+            kb.close()
+            return 0
         _log(f"connected to {host}")
         time.sleep(1.0)  # let the host's HID stack settle before the first report
 
@@ -316,12 +330,6 @@ def main() -> int:
         daemon=True,
     )
     worker.start()
-
-    def handle_signal(_sig, _frm):  # noqa: ANN001
-        _stop.set()
-
-    signal.signal(signal.SIGINT, handle_signal)
-    signal.signal(signal.SIGTERM, handle_signal)
 
     def _new_segmenter():
         return ptt if ptt is not None else VadSegmenter(cfg.vad, sr, cfg.audio.frame_ms)
@@ -337,7 +345,7 @@ def main() -> int:
     utterances = 0
     try:
         with open_source(cfg.audio) as source:
-            frames = source.frames()
+            frames = source.frames(stop=_stop)
             while not _stop.is_set():
                 for frame in frames:
                     if _stop.is_set() or _disconnected.is_set():
@@ -364,7 +372,9 @@ def main() -> int:
                 # stuck in accept() while the Mac shows a live connection. A real
                 # keyboard initiates its own reconnection; so do we now.
                 _log(f"host disconnected; dialling {host} back ...")
-                host = kb.connect_or_accept(host)
+                host = kb.connect_or_accept(host, stop=_stop)
+                if host is None:
+                    break
                 _log(f"reconnected to {host}")
                 time.sleep(1.0)
     except KeyboardInterrupt:

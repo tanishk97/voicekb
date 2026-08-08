@@ -246,12 +246,48 @@ class BluetoothHIDKeyboard:
         sock.listen(1)
         return sock
 
-    def accept(self) -> str:
-        """Block until a host connects both channels. Returns its address."""
+    def accept(self, stop: "threading.Event | None" = None,
+               poll_s: float = 0.5) -> "str | None":
+        """Wait for a host to connect both channels. Returns its address.
+
+        Returns None if `stop` is set while waiting.
+
+        The polling loop is not decoration. A bare blocking accept() cannot be
+        interrupted by a signal in CPython: PEP 475 makes the interpreter retry
+        a syscall interrupted by a handler that returns normally, so a SIGTERM
+        handler that merely sets an Event leaves this parked forever. systemd
+        then waits out its full stop timeout before resorting to SIGKILL, and a
+        shutdown that should take seconds takes a minute and a half with no
+        visible sign anything is happening.
+
+        Polling with a short timeout gives the loop somewhere to notice.
+        """
         if self._control_sock is None or self._interrupt_sock is None:
             raise RuntimeError("listen() must be called before accept()")
-        self._control_conn, cinfo = self._control_sock.accept()
-        self._interrupt_conn, _ = self._interrupt_sock.accept()
+
+        def _wait(sock):
+            sock.settimeout(poll_s)
+            while True:
+                if stop is not None and stop.is_set():
+                    return None, None
+                try:
+                    return sock.accept()
+                except socket.timeout:
+                    continue
+
+        ctrl, cinfo = _wait(self._control_sock)
+        if ctrl is None:
+            return None
+        intr, _ = _wait(self._interrupt_sock)
+        if intr is None:
+            ctrl.close()
+            return None
+
+        # Back to blocking for the connections themselves: a send() must not
+        # time out part-way through a report.
+        ctrl.settimeout(None)
+        intr.settimeout(None)
+        self._control_conn, self._interrupt_conn = ctrl, intr
         return cinfo[0]
 
     def connect_to(self, address: str, timeout_s: float = 10.0) -> bool:
@@ -294,11 +330,18 @@ class BluetoothHIDKeyboard:
         return True
 
     def connect_or_accept(self, known_host: str | None = None,
-                          timeout_s: float = 10.0) -> str:
-        """Try the host we know about first, then fall back to waiting."""
+                          timeout_s: float = 10.0,
+                          stop: "threading.Event | None" = None) -> "str | None":
+        """Try the host we know about first, then fall back to waiting.
+
+        `stop` is threaded through because this is the accept that actually
+        hangs on shutdown: it runs after the signal handlers are installed,
+        whereas the first accept in the pipeline runs before them and therefore
+        dies immediately under the default SIGTERM disposition.
+        """
         if known_host and self.connect_to(known_host, timeout_s):
             return known_host
-        return self.accept()
+        return self.accept(stop=stop)
 
     @property
     def connected(self) -> bool:
