@@ -119,10 +119,20 @@ returns as `(crickets chirping)` or `[BLANK_AUDIO]`. They are discarded
 correctly, but each costs ~2.5s of whisper first. The energy gate above is the
 intended fix; if it is not enough, raise `vad.aggressiveness` from 2 to 3.
 
-**Known cosmetic issue:** macOS shows a "Keyboard Setup Assistant" on connect,
-asking for a keypress to identify the layout. Typing works regardless — quit the
-dialog. Fixing it properly means having the Pi send the key right of left Shift
-(`Z` on ANSI) on demand, which needs a control channel into the running daemon.
+**macOS "Keyboard Setup Assistant"** — fixed by declaring a layout. SDP
+attribute `0x0203` (HIDCountryCode) was `0x00`, "not localized", so macOS could
+not tell what layout the keyboard had and ran its identification wizard on every
+new host, asking for the key right of left Shift. It is now `0x21` (33 = US).
+
+**An already-paired host will not pick this up** — it cached the old record.
+Forget the device on that host and pair again.
+
+If a host still asks, you can now answer it by voice: say **"press z"**, which is
+the key it wants on a US layout. Single characters became valid key commands for
+exactly this reason.
+
+Do not put explanatory text in an XML comment in that record: `--` is illegal
+inside one and BlueZ rejects the whole thing with no useful error.
 
 ## Stage 0: provisioning the Pi
 

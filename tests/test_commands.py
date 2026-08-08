@@ -66,6 +66,11 @@ def test_keys() -> None:
     # A bare direction as the whole utterance is a command: nobody dictates
     # "go up" as an entire sentence, and the cost of being wrong is two words.
     check("'go up' is a command", parse("go up") == KeyCommand("up", MOD_NONE, 1))
+    # Single characters, so macOS's Keyboard Setup Assistant can be answered:
+    # it asks for the key right of left Shift, which is "z" on a US layout.
+    check("'press z' sends the letter", parse("press z") == KeyCommand("z", MOD_NONE, 1))
+    check("'press 5' sends the digit", parse("press 5") == KeyCommand("5", MOD_NONE, 1))
+    check("a letter still needs the verb", parse("z") is None)
 
 
 def test_not_commands() -> None:

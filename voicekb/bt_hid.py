@@ -86,7 +86,18 @@ def _descriptor_hex() -> str:
 
 
 def sdp_record() -> str:
-    """SDP service record XML for a HID keyboard."""
+    """SDP service record XML for a HID keyboard.
+
+    Attribute 0x0203 is HIDCountryCode, set to 0x21 (33 = US). Left at 0x00,
+    "not localized", macOS cannot tell what layout the keyboard has, so on every
+    new host it runs the Keyboard Setup Assistant and asks for the key to the
+    right of left Shift. That is a request this device cannot satisfy on its own
+    -- it types only what it is told to -- so the dialog blocks until dismissed.
+    Declaring the country is what stops the question being asked.
+
+    (Do not put that explanation in an XML comment: `--` is illegal inside one,
+    and BlueZ rejects the whole record with no useful error.)
+    """
     return f"""<?xml version="1.0" encoding="UTF-8" ?>
 <record>
   <attribute id="0x0001">
@@ -123,7 +134,7 @@ def sdp_record() -> str:
   <attribute id="0x0200"><uint16 value="0x0100" /></attribute>
   <attribute id="0x0201"><uint16 value="0x0111" /></attribute>
   <attribute id="0x0202"><uint8 value="0x40" /></attribute>
-  <attribute id="0x0203"><uint8 value="0x00" /></attribute>
+  <attribute id="0x0203"><uint8 value="0x21" /></attribute>
   <attribute id="0x0204"><boolean value="false" /></attribute>
   <attribute id="0x0205"><boolean value="true" /></attribute>
   <attribute id="0x0206">
@@ -322,8 +333,15 @@ class BluetoothHIDKeyboard:
         return skipped
 
     def press_named(self, name: str, modifiers: int = MOD_NONE, times: int = 1) -> bool:
-        """Press a named key such as "enter" or "up". False if the name is unknown."""
+        """Press a named key ("enter", "up") or a single character ("z").
+
+        False if the name is unknown.
+        """
         key = key_for_name(name, modifiers)
+        if key is None and len(name) == 1:
+            ch = key_for_char(name)
+            if ch is not None:
+                key = Key(ch.usage, ch.modifiers | modifiers)
         if key is None:
             return False
         for _ in range(times):

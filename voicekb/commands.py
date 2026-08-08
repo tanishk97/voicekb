@@ -22,7 +22,7 @@ import re
 from dataclasses import dataclass
 from typing import Union
 
-from .hid_keycodes import MODIFIER_NAMES, MOD_NONE, NAMED_KEYS
+from .hid_keycodes import MODIFIER_NAMES, MOD_NONE, NAMED_KEYS, key_for_char
 
 # Spoken profile names. Kept here rather than imported from llm.PROFILES so a
 # missing llama-server cannot stop "raw mode" from working.
@@ -98,10 +98,14 @@ def parse(text: str) -> "Command | None":
     words = m.group("rest").split()
 
     # Peel off the trailing repeat count: "... twice", "... 3 times".
+    #
+    # Only when something remains to repeat. "press 5" is the digit 5, not a
+    # repeat of nothing -- a count with no key is not a count.
     count = 1
     if words and words[-1] in ("time", "times"):
         words.pop()
-    if words and (words[-1].isdigit() or words[-1] in _WORD_COUNTS):
+    if (len(words) > 1
+            and (words[-1].isdigit() or words[-1] in _WORD_COUNTS)):
         count = _count_from(words.pop())
     # Trailing noise words: "press the enter key", "press up arrow".
     if words and words[-1] in ("key", "arrow"):
@@ -117,6 +121,11 @@ def parse(text: str) -> "Command | None":
         key = "".join(words[-2:])
         words = words[:-2]
     elif words[-1] in NAMED_KEYS:
+        key = words.pop()
+    elif len(words[-1]) == 1 and key_for_char(words[-1]) is not None:
+        # A single printable character: "press z", "press slash". Needed because
+        # macOS's Keyboard Setup Assistant asks for the key right of left Shift
+        # (z on a US layout) and there was otherwise no way to answer it.
         key = words.pop()
     if key is None:
         # "press the big red button" is dictation, not a key we know.

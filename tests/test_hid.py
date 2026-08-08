@@ -91,8 +91,26 @@ def test_unmappable() -> None:
           unmappable("".join(chr(c) for c in range(32, 127))) == [])
 
 
+def test_press_named_accepts_characters() -> None:
+    """press_named must take a bare character, not only a NAMED_KEYS name."""
+    print("=== press_named character fallback ===")
+    from voicekb.bt_hid import BluetoothHIDKeyboard
+
+    kb = BluetoothHIDKeyboard()
+    sent = []
+    kb.send_report = lambda r: sent.append(r)  # no Bluetooth needed
+
+    check("named key works", kb.press_named("enter") is True)
+    sent.clear()
+    check("single character works", kb.press_named("z") is True)
+    check("  and sends z's usage code", any(r[2] == 0x1D for r in sent),
+          f"{[r[2] for r in sent]}")
+    check("unknown name still fails", kb.press_named("flurb") is False)
+
+
 def main() -> int:
-    for fn in (test_letters, test_symbols, test_named, test_reports, test_unmappable):
+    for fn in (test_letters, test_symbols, test_named, test_reports, test_unmappable,
+               test_press_named_accepts_characters):
         fn()
     print()
     if failures:
