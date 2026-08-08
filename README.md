@@ -134,6 +134,51 @@ exactly this reason.
 Do not put explanatory text in an XML comment in that record: `--` is illegal
 inside one and BlueZ rejects the whole thing with no useful error.
 
+### Shutdown, and why the power button seemed dead
+
+Pressing the Pi 5's power button once appeared to do nothing, so it got pressed
+repeatedly. Three things compounded:
+
+**`accept()` ignored SIGTERM.** CPython retries a syscall interrupted by a
+handler that returns normally (PEP 475), so a handler that merely sets a
+`threading.Event` leaves a blocking `accept()` parked indefinitely. systemd then
+waited its full 90s default before SIGKILL.
+
+The subtlety: the *first* `accept()` ran **before** the handlers were installed,
+so it died instantly under the default disposition. The hang was the reconnect
+`accept()` in `connect_or_accept()`, which runs after them — reached whenever the
+host sleeps or moves out of range, which is exactly the state the device is in
+when you finish dictating and reach for the button.
+
+**Nothing reported the wait.** systemd's "A stop job is running… (1min 30s)" goes
+to a console a headless install does not have.
+
+**A third press boots it back on.** Once halted, a Pi 5 sits in standby with a
+**red** LED, and a press powers it up. So: press one starts an invisible 90s
+shutdown, press two does nothing because logind has gone, press three reboots it
+— which reads as "it never shut down".
+
+Fixed by making `accept()` poll with a short timeout and check a stop event, then
+moving the handlers ahead of the first accept — only safe *because* of the poll
+fix, since otherwise it would have converted the fast case into a second hang.
+`audio.py` had the identical unbounded `get()` and is bounded too. All three
+units now set `TimeoutStopSec=10` and `KillMode=mixed`, so any future regression
+costs ten seconds rather than ninety.
+
+**Measured after the fix: `systemctl stop voicekb` takes 0.46s and logs
+"Deactivated successfully"** — a clean exit through the new path, not a SIGKILL.
+
+**LED reference:** green = running, red = halted and in standby (press to boot).
+
+### The journal was volatile, which is why none of this was diagnosable
+
+`setup_logging.sh` set size caps but left `Storage` at Debian's default of
+`auto`, which means **volatile** unless `/var/log/journal` exists. The previous
+boot's log — the only place a shutdown problem is visible — was discarded at
+every reboot. The script now creates that directory and sets
+`Storage=persistent`; the existing 200M cap is what keeps this safe on an SD
+card. `journalctl --list-boots` now shows history.
+
 ## Stage 0: provisioning the Pi
 
 Flashed with Raspberry Pi Imager v2.0.10, which provisions via cloud-init (user-data/network-config on the FAT boot partition), so the Pi joins
